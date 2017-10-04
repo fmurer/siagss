@@ -17,3 +17,8 @@ The listings below contain the requirements to the two systems.
 - The requests must be encoded to a QR-code and then displayed on a screen.
 - The system needs to read the signed request from the screen of the signer.
 - The signed requests must be sent back to the originating sender.
+
+
+## System Overview:
+
+![System Overview](images/SystemOverview.png "System Overview")
