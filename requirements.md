@@ -21,4 +21,4 @@ The listings below contain the requirements to the two systems.
 
 ## System Overview:
 
-![System Overview](images/SystemOverview.png "System Overview")
+<center>![System Overview](images/SystemOverview.png "System Overview")</center>
