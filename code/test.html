@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+	<title>Webcam Stream</title>
+
+	<style>
+		#container {
+		    margin: 0px auto;
+		    width: 500px;
+		    height: 375px;
+		    border: 10px #333 solid;
+		}
+		#videoElement {
+		    width: 500px;
+		    height: 375px;
+		    background-color: #666;
+		}
+	</style>
+
+	<script type="text/javascript" src="libs/instascan/instascan.min.js"></script>
+	<script type="text/javascript" src="libs/qrcodejs/qrcode.min.js"></script>
+	<script type="text/javascript">
+		function save_to_file(filename, text) {
+		    var pom = document.createElement('a');
+		    pom.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+		    pom.setAttribute('download', filename);
+
+		    if (document.createEvent) {
+		        var event = document.createEvent('MouseEvents');
+		        event.initEvent('click', true, true);
+		        pom.dispatchEvent(event);
+		    } else {
+		        pom.click();
+		    }
+		}
+
+		var loc = window.location.pathname;
+	</script>
+</head>
+
+<body>
+	<div style="display: none;">
+		<video id="preview" style="display: none;"></video>
+	</div>
+	<div id="content"></div>
+
+	<script type="text/javascript">
+		let scanner = new Instascan.Scanner({video: document.getElementById('preview')/*, refractoryPeriod: 500*/});
+		scanner.addListener('scan', function (content) {
+			console.log(content);
+			var current = document.getElementById('content').innerHTML;
+			document.getElementById('content').innerHTML = content;
+			//save_to_file(loc + 'files/qrcode_content.txt', content);
+			//var string = "You have read the QR-Code successfully!";
+			//new QRCode(document.getElementById('content'), string);
+		});
+		Instascan.Camera.getCameras().then(function (cameras) {
+			if (cameras.length > 0) {
+				scanner.start(cameras[0]);
+			} else {
+				console.error('No Cameras found!');
+			}
+		}).catch(function (e) {
+			console.error(e);
+		});
+	</script>
+	<!--
+	<div id="container">
+	    <video autoplay="true" id="videoElement">
+
+	    </video>
+	</div>
+
+	<script>
+		var video = document.querySelector("#videoElement");
+
+		navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia || navigator.oGetUserMedia;
+
+		if (navigator.getUserMedia) {
+		    navigator.getUserMedia({video: true}, handleVideo, videoError);
+		}
+
+		function handleVideo(stream) {
+		    video.src = window.URL.createObjectURL(stream);
+		}
+
+		function videoError(e) {
+		    alert("You need to allow the webcam access in order to see the video!");
+		}
+	</script>
+	-->
+</body>
+</html>
