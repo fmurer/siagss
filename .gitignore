@@ -1,3 +1,4 @@
+# ignore all the files from LaTeX
 *.aux
 *.bbl
 *.blg
@@ -5,3 +6,6 @@
 *.out
 *.gz
 *.synctexx
+
+# ignore the literature folder
+literature/*

@@ -16,44 +16,31 @@
 		    height: 375px;
 		    background-color: #666;
 		}
+		#content {
+			width: 50%;
+			margin: 0px auto;
+		}
 	</style>
 
 	<script type="text/javascript" src="libs/instascan/instascan.min.js"></script>
 	<script type="text/javascript" src="libs/qrcodejs/qrcode.min.js"></script>
-	<script type="text/javascript">
-		function save_to_file(filename, text) {
-		    var pom = document.createElement('a');
-		    pom.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
-		    pom.setAttribute('download', filename);
-
-		    if (document.createEvent) {
-		        var event = document.createEvent('MouseEvents');
-		        event.initEvent('click', true, true);
-		        pom.dispatchEvent(event);
-		    } else {
-		        pom.click();
-		    }
-		}
-
-		var loc = window.location.pathname;
-	</script>
 </head>
 
 <body>
 	<div style="display: none;">
 		<video id="preview" style="display: none;"></video>
 	</div>
+
 	<div id="content"></div>
 
 	<script type="text/javascript">
 		let scanner = new Instascan.Scanner({video: document.getElementById('preview')/*, refractoryPeriod: 500*/});
 		scanner.addListener('scan', function (content) {
 			console.log(content);
-			var current = document.getElementById('content').innerHTML;
-			document.getElementById('content').innerHTML = content;
-			//save_to_file(loc + 'files/qrcode_content.txt', content);
-			//var string = "You have read the QR-Code successfully!";
-			//new QRCode(document.getElementById('content'), string);
+			//var current = document.getElementById('content').innerHTML;
+			//document.getElementById('content').innerHTML = content;
+			var string = "You have read the QR-Code successfully!";
+			new QRCode(document.getElementById('content'), {text: string, width: 256, height: 256});
 		});
 		Instascan.Camera.getCameras().then(function (cameras) {
 			if (cameras.length > 0) {
