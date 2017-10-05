@@ -40,7 +40,7 @@
 			//var current = document.getElementById('content').innerHTML;
 			//document.getElementById('content').innerHTML = content;
 			var string = "You have read the QR-Code successfully!";
-			new QRCode(document.getElementById('content'), {text: string, width: 256, height: 256});
+			new QRCode(document.getElementById('content'), {text: string, width: 512, height: 512});
 		});
 		Instascan.Camera.getCameras().then(function (cameras) {
 			if (cameras.length > 0) {
@@ -52,30 +52,5 @@
 			console.error(e);
 		});
 	</script>
-	<!--
-	<div id="container">
-	    <video autoplay="true" id="videoElement">
-
-	    </video>
-	</div>
-
-	<script>
-		var video = document.querySelector("#videoElement");
-
-		navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia || navigator.oGetUserMedia;
-
-		if (navigator.getUserMedia) {
-		    navigator.getUserMedia({video: true}, handleVideo, videoError);
-		}
-
-		function handleVideo(stream) {
-		    video.src = window.URL.createObjectURL(stream);
-		}
-
-		function videoError(e) {
-		    alert("You need to allow the webcam access in order to see the video!");
-		}
-	</script>
-	-->
 </body>
 </html>
