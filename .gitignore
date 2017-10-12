@@ -9,3 +9,7 @@
 
 # ignore the literature folder
 literature/*
+
+# ignore Jetbrains files
+*.idea/
+*.iml

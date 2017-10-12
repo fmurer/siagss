@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title><%= title %></title>
+        <link rel='stylesheet' href='/stylesheets/style.css' />
+        <script type="text/javascript" src="/javascripts/instascan.min.js"></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    </head>
+    <body>
+        <div class="container">
+            <div style="display: none;">
+                <video id="preview" style="display: none;"></video>
+            </div>
+            <div class="qrcode" id='qrcode'><%= qrcode %></div>
+
+            <script type="text/javascript">
+                scanner = new Instascan.Scanner({video: document.getElementById('preview')});
+                scanner.addListener('scan', function(content) {
+                    console.log(content);
+                    $.ajax({
+                        type: 'POST',
+                        data: JSON.stringify({qrcode: content}),
+                        contentType: 'application/json',
+                        url: '/',
+                        success: function(data) {
+                            document.getElementById('qrcode').innerHTML = data;
+                        }
+                    });
+
+                });
+                Instascan.Camera.getCameras().then(function (cameras) {
+                    if (cameras.length > 0) {
+                        scanner.start(cameras[0]);
+                    } else {
+                        console.error('No Cameras found!');
+                        alert('No Cameras found!');
+                    }
+                }).catch(function (e) {
+                    console.error(e);
+                });
+            </script>
+        </div>
+    </body>
+</html>
