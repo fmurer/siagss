@@ -1,26 +1,28 @@
 var express = require('express');
+var qr_generator = require('qrcode-generator');
 var router = express.Router();
 
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
-    qrcode = '';
-
-    if (req.query.qrcode) {
-        qrcode = decodeURIComponent(req.query.qrcode);
-    }
-
-    res.render('index', { title: 'Express', qrcode: qrcode.toString() });
-    //console.log('QR-Code: ' + qrcode);
-    //console.log(req.query);
+    res.render('index', { title: 'Express'});
 });
 
 
 router.post('/', function (req, res) {
-    console.log(req.body.qrcode);
-    var qrcode = req.body.qrcode;
 
-    res.json('YEEEEEEES');
+    // content of the qr-code read by the webcam
+    var qrcode = req.body.qrcode;
+    
+    var response = "I really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this worked";
+
+    // generate the QR-Code
+    var qr = qr_generator(0, 'L');
+    qr.addData(response);
+    qr.make();
+
+    // send back the new generated QR-Code
+    res.json(qr.createImgTag(cellSize=8));
 
 });
 
