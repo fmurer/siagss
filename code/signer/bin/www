@@ -5,7 +5,7 @@
  */
 
 var app = require('../app');
-var debug = require('debug')('yet-another-test:server');
+var debug = require('debug')('signer:server');
 var http = require('http');
 
 /**
