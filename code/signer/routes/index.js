@@ -5,15 +5,17 @@ var router = express.Router();
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
-    res.render('index', { title: 'Express'});
+    res.render('index', { title: 'Signing System'});
 });
 
-
+/* Handle the POST request from the frontend when successfully read a QR-Code */
 router.post('/', function (req, res) {
 
     // content of the qr-code read by the webcam
-    var qrcode = req.body.qrcode;
-    
+    var data = req.body.qrcode;
+
+    // TODO: Do some stuff with the data
+
     var response = "I really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this worked";
 
     // generate the QR-Code

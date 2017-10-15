@@ -9,9 +9,9 @@ The following points describe the **functional requirements** for the two system
 * Signing Part: The signer must be able to
     - read the incoming requests in form of a QR-code from a screen (using a camera).
     - authenticate incoming requests.
-    - only accept valid requests and ignore all malformed requests.
-    - sign authenticated requests.
-    - encode the signed request in a QR-code and display it on the screen.
+    - only accept valid requests and ignore all malformed or not authenticated requests.
+    - sign authenticated requests using the [Curve22519 Algorithm][1].
+    - encode the signed request to a QR-code and display it on the screen.
 
 
 * Other Requirements: The signer must be able to
@@ -28,11 +28,14 @@ The signee must be able to
 - queue the incoming requests from the network
 
 
+### Both Systems:
+- Both systems must be timed such that no two different requests get handled in an interleaved manner, i.e. only one request is handled at a time.
+
 ## Non-Functional Requirements:
 The following points describe the **non-functional requirements** for the two systems.
 
 ### System One (Signer):
-- The system is located in an isolated environment without connection to any network.
+- The system is located in an isolated environment without connection to any network (In an ideal case, the power supply is also done without any connection. This could be achieved with charging over induction).
 - The system must keep its keys secret.
 - The system should be able to sign approximately 2 million signatures a day, that is around 23 signatures per second.
 
@@ -46,8 +49,4 @@ The following points describe the **non-functional requirements** for the two sy
 
 
 
-## System Overview:
-The following picture shows an overview of how the two systems work together.
-![System Overview](images/SystemOverview.png "System Overview")
-
-(Step 2 and 3 might be encoded within the same QR-code)
+[1]: https://de.wikipedia.org/wiki/Curve25519
