@@ -9,7 +9,14 @@ The following picture shows an overview of how the two systems work together.
 
 
 ## Run the server
-In order to start the server, run the following
-> node code/src/bin/www
+In order to start the signer, run the
+```console
+node code/signer/bin/www
+```
+
+To run the signee, run
+```console
+node code/signee/bin/www
+```
 
 and then connect to `localhost:3000`.
