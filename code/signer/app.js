@@ -1,44 +1,43 @@
+// app.js
 var express = require('express');
-var path = require('path');
-var favicon = require('serve-favicon');
-var logger = require('morgan');
-var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
+var qr_generator = require('qrcode-generator');
+var logger = require('morgan');
 
-var index = require('./routes/index');
 
 var app = express();
+var server = require('http').createServer(app);
 
-// view engine setup
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'ejs');
-
-// uncomment after placing your favicon in /public
-//app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
-app.use(logger('dev'));
+app.use(express.static(__dirname + '/node_modules'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(logger('dev'));
 
-app.use('/', index);
-
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  var err = new Error('Not Found');
-  err.status = 404;
-  next(err);
+/*
+    handle requests
+*/
+app.get('/', function(req, res,next) {
+    res.sendFile(__dirname + '/index.html');
 });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+app.post('/', function(req, res) {
+    // content of the qr-code read by the webcam
+    var data = req.body.qrcode;
 
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
+    // TODO: Do some stuff with the data
+
+    var response = data + "1";
+
+    // generate the QR-Code
+    //var qr = qr_generator(0, 'L');
+    //qr.addData(response);
+    //qr.make();
+
+    // send back the new generated QR-Code
+    //res.json(qr.createImgTag(cellSize=8));
+
+    // use the jquery qrcode and let the browser do the generation -> much faster
+    res.json(response);
 });
 
-module.exports = app;
+server.listen(3000);

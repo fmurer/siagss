@@ -1,44 +1,83 @@
+// app.js
 var express = require('express');
-var path = require('path');
-var favicon = require('serve-favicon');
-var logger = require('morgan');
-var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
+var qr_generator = require('qrcode-generator');
+var logger = require('morgan');
 
-var index = require('./routes/index');
 
+/*
+    SERVER 1, responsible to interact with the browser
+*/
 var app = express();
+var server = require('http').createServer(app);
+var io = require('socket.io')(server);
 
-// view engine setup
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'ejs');
-
-// uncomment after placing your favicon in /public
-//app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
-app.use(logger('dev'));
+app.use(express.static(__dirname + '/node_modules'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(logger('dev'));
 
-app.use('/', index);
-
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  var err = new Error('Not Found');
-  err.status = 404;
-  next(err);
+/*
+    handle requests
+*/
+app.get('/', function(req, res,next) {
+    res.sendFile(__dirname + '/index.html');
 });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+app.post('/', function(req, res) {
+    var qr_code = req.body.qrcode;
 
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
+    console.log(qr_code);
 });
 
-module.exports = app;
+
+/*
+    Socket IO stuff
+*/
+
+var connected_users = {};
+
+io.on('connection', function(client) {
+    connected_users = {};
+    var clientID = client.conn.id;
+    connected_users[clientID] = client;
+});
+
+server.listen(3000);
+
+
+/*
+    SERVER 2, responsible to communicate with the network
+*/
+var app_network = express();
+var server_network = require('http').createServer(app_network);
+
+app_network.use(express.static(__dirname + '/node_modules'));
+app_network.use(bodyParser.json());
+app_network.use(bodyParser.urlencoded({ extended: false }));
+
+
+app_network.post('/', function(req, res) {
+
+    var network_data = req.body.data;
+
+    var qr = qr_generator(0, 'L');
+    qr.addData(network_data);
+    qr.make();
+
+    var img_tag = qr.createImgTag(cellSize=12);
+
+    io.sockets.emit('update_img', img_tag);
+
+    var last_id = (last=Object.keys(connected_users))[last.length-1];
+    var client = connected_users[last_id];
+
+    console.log(Object.keys(connected_users));
+
+    client.on('answer', function(data) {
+        res.end(data);
+    });
+
+});
+
+server_network.listen(3001);

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Signer</title>
+        <link rel='stylesheet' href='/css/style.css' />
+        <script type="text/javascript" src="/instascan/instascan.min.js"></script>
+        <script src="/jquery/dist/jquery.min.js"></script>
+        <script type="text/javascript" src="/jquery-qrcode/dist/jquery-qrcode.min.js"></script>
+    </head>
+    <body>
+        <div id="container">
+            <div style="display: none;">
+                <video id="preview" style="display: none;"></video>
+            </div>
+            <!-- Placeholder for the QR-Code -->
+            <!-- <div class="qrcode" id='qrcode'></div> -->
+            <div id=qr_code>
+                <canvas width="auto" height="100%">
+            </div>
+
+            <script type="text/javascript">
+                // Initialize the QR-Code scanner from the instascan library
+                opts = {
+                    continuous: true,
+                    video: document.getElementById('preview'),
+                    mirror: false,
+                    captureImage: false,
+                    backgroundScan: true,
+                    refractoryPeriod: 1000,
+                    scanPeriod: 1
+                };
+                scanner = new Instascan.Scanner(opts);
+
+                // add a listener to the camera. as soon as the scanner sees a QR-Code, the callback
+                // function is executed. This sends an Ajax POST request with the read data to the
+                // index page. This request gets handled from the Node.js backend.
+                scanner.addListener('scan', function(content) {
+                    console.log(content);
+                    var counter = 0;
+                    $.ajax({
+                        type: 'POST',
+                        data: JSON.stringify({qrcode: content}),
+                        contentType: 'application/json',
+                        url: '/',
+                        success: function(data) {
+                            //document.getElementById('qrcode').innerHTML = data;
+                            if (counter == 0) {
+                                generateQRCode(data);
+                                counter += 1;
+                            }
+                        }
+                    });
+                });
+
+                // choose the camera
+                Instascan.Camera.getCameras().then(function (cameras) {
+                    if (cameras.length > 0) {
+                        scanner.start(cameras[0]);
+                    } else {
+                        console.error('No Cameras found!');
+                        alert('No Cameras found! You need a camera attached to the System!');
+                    }
+                }).catch(function (e) {
+                    console.error(e);
+                });
+
+                function generateQRCode(data) {
+                    options = {
+                        // render method: 'canvas', 'image' or 'div'
+                        render: 'canvas',
+                        // version range somewhere in 1 .. 40
+                        minVersion: 1,
+                        maxVersion: 40,
+                        // error correction level: 'L', 'M', 'Q' or 'H'
+                        ecLevel: 'L',
+                        // offset in pixel if drawn onto existing canvas
+                        left: 0,
+                        top: 0,
+                        // size in pixel
+                        size: 200,
+                        // code color or image element
+                        fill: '#000',
+                        // background color or image element, null for transparent background
+                        background: null,
+                        // content
+                        text: data,
+                        // corner radius relative to module width: 0.0 .. 0.5
+                        radius: 0,
+                        // quiet zone in modules
+                        quiet: 0,
+                        // modes
+                        // 0: normal
+                        // 1: label strip
+                        // 2: label box
+                        // 3: image strip
+                        // 4: image box
+                        mode: 0,
+                        mSize: 0.1,
+                        mPosX: 0.5,
+                        mPosY: 0.5,
+                        label: 'no label',
+                        fontname: 'sans',
+                        fontcolor: '#000',
+                        image: null
+                    };
+                    $('#qr_code').empty().qrcode(options);
+                }
+            </script>
+        </div>
+    </body>
+</html>
