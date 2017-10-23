@@ -16,16 +16,18 @@ router.post('/', function (req, res) {
 
     // TODO: Do some stuff with the data
 
-    var response = "I really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this workedI really hope this worked";
+    var response = data + "1";
 
     // generate the QR-Code
-    var qr = qr_generator(0, 'L');
-    qr.addData(response);
-    qr.make();
+    //var qr = qr_generator(0, 'L');
+    //qr.addData(response);
+    //qr.make();
 
     // send back the new generated QR-Code
-    res.json(qr.createImgTag(cellSize=8));
+    //res.json(qr.createImgTag(cellSize=8));
 
+    // use the jquery qrcode and let the browser do the generation -> much faster
+    res.json(response);
 });
 
 

@@ -5,9 +5,9 @@
  */
 
 var app = require('../app');
+var app_network = require('../app_network')
 var debug = require('debug')('signee:server');
 var http = require('http');
-
 /**
  * Get port from environment and store in Express.
  */
@@ -15,11 +15,20 @@ var http = require('http');
 var port = normalizePort(process.env.PORT || '3000');
 app.set('port', port);
 
+var port_network = normalizePort('4000');
+app_network.set('port', port_network);
+
 /**
  * Create HTTP server.
  */
 
 var server = http.createServer(app);
+var server_network = http.createServer(app_network);
+
+// Socket.io
+var socketApi = require('../socketApi');
+var io = socketApi.io;
+io.attach(server);
 
 /**
  * Listen on provided port, on all network interfaces.
@@ -28,6 +37,16 @@ var server = http.createServer(app);
 server.listen(port);
 server.on('error', onError);
 server.on('listening', onListening);
+
+server_network.listen(port_network);
+server_network.on('error', onError);
+server_network.on('listening', function() {
+    var addr = server_network.address();
+    var bind = typeof addr === 'string'
+      ? 'pipe ' + addr
+      : 'port ' + addr.port;
+    debug('Listening on ' + bind);
+});
 
 /**
  * Normalize a port into a number, string, or false.
