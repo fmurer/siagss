@@ -4,16 +4,12 @@
         <title>Signer</title>
         <link rel='stylesheet' href='/css/style.css' />
         <script type="text/javascript" src="/instascan/instascan.min.js"></script>
-        <script src="/jquery/dist/jquery.min.js"></script>
+        <script type="text/javascript" src="/jquery/dist/jquery.min.js"></script>
         <script type="text/javascript" src="/jquery-qrcode/dist/jquery-qrcode.min.js"></script>
     </head>
     <body>
         <div id="container">
-            <div style="display: none;">
-                <video id="preview" style="display: none;"></video>
-            </div>
             <!-- Placeholder for the QR-Code -->
-            <!-- <div class="qrcode" id='qrcode'></div> -->
             <div id=qr_code>
                 <canvas width="auto" height="100%">
             </div>
@@ -22,7 +18,7 @@
                 // Initialize the QR-Code scanner from the instascan library
                 opts = {
                     continuous: true,
-                    video: document.getElementById('preview'),
+                    // video: document.getElementById('preview'),
                     mirror: false,
                     captureImage: false,
                     backgroundScan: true,
@@ -35,7 +31,6 @@
                 // function is executed. This sends an Ajax POST request with the read data to the
                 // index page. This request gets handled from the Node.js backend.
                 scanner.addListener('scan', function(content) {
-                    console.log(content);
                     var counter = 0;
                     $.ajax({
                         type: 'POST',
@@ -43,7 +38,6 @@
                         contentType: 'application/json',
                         url: '/',
                         success: function(data) {
-                            //document.getElementById('qrcode').innerHTML = data;
                             if (counter == 0) {
                                 generateQRCode(data);
                                 counter += 1;
@@ -77,7 +71,7 @@
                         left: 0,
                         top: 0,
                         // size in pixel
-                        size: 200,
+                        size: 400,
                         // code color or image element
                         fill: '#000',
                         // background color or image element, null for transparent background
