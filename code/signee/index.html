@@ -2,19 +2,16 @@
 <html>
     <head>
         <title>Signee</title>
-        <script src="/jquery/dist/jquery.js"></script>
-        <script src="/socket.io/socket.io.js"></script>
-        <script src="/instascan/instascan.min.js"></script>
-
-        <link rel="stylesheet" href="/css/styles.css" type="text/css" />
+        <link rel="stylesheet" href="/css/styles.css" />
+        <script type="text/javascript" src="/instascan/instascan.min.js"></script>
+        <script type="text/javascript" src="/jquery/dist/jquery.js"></script>
+        <script type="text/javascript" src="/socket.io/socket.io.js"></script>
     </head>
     <body>
         <div id="container">
-            <div style="display: none;">
-                <video id="preview" style="display: none;"></video>
-            </div>
-
+            <!-- Placeholder for the QR-Code -->
             <div id=qr_code></div>
+
             <!-- Handling update from Server -->
             <script>
                 var socket = io.connect('http://localhost:3000');
@@ -29,7 +26,7 @@
                 // Initialize the QR-Code scanner from the instascan library
                 opts = {
                     continuous: true,
-                    video: document.getElementById('preview'),
+                    //video: document.getElementById('preview'),
                     mirror: false,
                     captureImage: false,
                     backgroundScan: true,

@@ -11,12 +11,12 @@ The following picture shows an overview of how the two systems work together.
 ## Run the server
 In order to start the signer, run the
 ```console
-node code/signer/bin/www
+node code/signer/app.js
 ```
 
 To run the signee, run
 ```console
-node code/signee/bin/www
+node code/signee/app.js
 ```
 
 and then connect to `localhost:3000`.

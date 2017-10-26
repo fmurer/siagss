@@ -35,7 +35,7 @@ app.post('/', function(req, res) {
     Socket IO stuff
 */
 
-var connected_users = {};
+var connected_users;
 
 io.on('connection', function(client) {
     connected_users = {};
@@ -59,21 +59,23 @@ app_network.use(bodyParser.urlencoded({ extended: false }));
 
 app_network.post('/', function(req, res) {
 
+    // get the data received from the network
     var network_data = req.body.data;
 
+    // generate the qr-code
     var qr = qr_generator(0, 'L');
     qr.addData(network_data);
     qr.make();
 
     var img_tag = qr.createImgTag(cellSize=12);
 
+    // notify the browser which then sets the qr-code
     io.sockets.emit('update_img', img_tag);
 
     var last_id = (last=Object.keys(connected_users))[last.length-1];
     var client = connected_users[last_id];
 
-    console.log(Object.keys(connected_users));
-
+    // handle the answer once a new qr-code has been scanned.
     client.on('answer', function(data) {
         res.end(data);
     });

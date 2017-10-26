@@ -8,7 +8,7 @@ The following points describe the **functional requirements** for the two system
 ### System One (Signer):
 * Signing Part: The signer must be able to
     - read the incoming requests in form of a QR-code from a screen (using a camera).
-    - authenticate incoming requests. (would this be more effective when done at the signee?)
+    - authenticate incoming requests. (see [authentication.md](./authentication.md) for more details)
     - only accept valid requests and ignore all malformed or not authenticated requests.
     - sign authenticated requests using the [Curve25519 Algorithm][1].
     - encode the signed request to a QR-code and display it on the screen.
@@ -45,7 +45,7 @@ The following points describe the **non-functional requirements** for the two sy
 ### Both systems:
 - Both systems must run on a recent browser.
 - Both systems must have a screen and a camera attached.
-- Both systems must be secure against an active and passive attacker sitting on the network.
+- Both systems must be secure against an active and passive attacker sitting on the (outer / not air-gapped channel) network.
 
 
 

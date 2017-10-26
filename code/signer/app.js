@@ -1,7 +1,6 @@
 // app.js
 var express = require('express');
 var bodyParser = require('body-parser');
-var qr_generator = require('qrcode-generator');
 var logger = require('morgan');
 var curve = require('tweetnacl');
 
@@ -14,9 +13,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
-var keyPair;
-
-generateKeyPair();
+var keyPair = generateKeyPair();
 
 /*
     handle requests
@@ -29,8 +26,10 @@ app.post('/', function(req, res) {
     // content of the qr-code read by the webcam
     var data = str2buf(req.body.qrcode);
 
+    // sign the incoming request
     var response = curve.sign(data, keyPair.secretKey);
 
+    // we need to convert it into a string in order to properly generate a QR-code out of it.
     response = buf2str(response);
 
     // send back response to the ajax success function which will then generate the qr code.
@@ -44,14 +43,14 @@ server.listen(3000);
     Generate Key Pair for signing
 */
 function generateKeyPair() {
-    keyPair = curve.sign.keyPair();
+    return curve.sign.keyPair();
 }
 
 /*
     Helper functions in order to convert between String and Uint8Array
 */
-function buf2str(buf) {
-    return String.fromCharCode.apply(null, new Uint8Array(buf));
+function buf2str(buffer) {
+    return String.fromCharCode.apply(null, new Uint8Array(buffer));
 }
 
 function str2buf(str) {
