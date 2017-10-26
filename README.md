@@ -8,15 +8,19 @@ The following picture shows an overview of how the two systems work together.
 (Step 2 and 3 might be encoded within the same QR-code)
 
 
-## Run the server
-In order to start the signer, run the
+## First small Demo
+
+In order to run a first small demo do the following:
+
+1. Start the signer
 ```console
 node code/signer/app.js
 ```
-
-To run the signee, run
+2. Start the signee on another machine
 ```console
 node code/signee/app.js
 ```
 
-and then connect to `localhost:3000`.
+3. On both, the signer and the signee, browse to `localhost:3000`
+
+4. Send a POST request to http://ADDRESS_OF_SIGNEE:3001 with the data you want to send in the parameter `data`.

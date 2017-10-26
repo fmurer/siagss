@@ -27,13 +27,14 @@ app.post('/', function(req, res) {
     var data = str2buf(req.body.qrcode);
 
     // sign the incoming request
-    var response = curve.sign(data, keyPair.secretKey);
-
+    console.time('signing_time');
+    var signature = curve.sign.detached(data, keyPair.secretKey);
+    console.timeEnd('signing_time');
     // we need to convert it into a string in order to properly generate a QR-code out of it.
-    response = buf2str(response);
-
+    var base64_signature = Buffer.from(signature).toString('base64');
+    
     // send back response to the ajax success function which will then generate the qr code.
-    res.json(response);
+    res.json(base64_signature);
 });
 
 server.listen(3000);
