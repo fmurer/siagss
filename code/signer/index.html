@@ -5,7 +5,7 @@
         <link rel='stylesheet' href='/css/style.css' />
         <script type="text/javascript" src="/instascan/instascan.min.js"></script>
         <script type="text/javascript" src="/jquery/dist/jquery.min.js"></script>
-        <script type="text/javascript" src="/jquery-qrcode/jquery-qrcode.min.js"></script>
+        <script type="text/javascript" src="/jquery_qrcode/jquery-qrcode.min.js"></script>
     </head>
     <body>
         <div id="container">
@@ -40,7 +40,7 @@
                         success: function(data) {
                             if (counter == 0) {
                                 console.time('signer_generate_time');
-                                generateQRCode(data);
+                                generateQRCode(JSON.stringify(data));
                                 console.timeEnd('signer_generate_time');
                                 counter += 1;
                             }

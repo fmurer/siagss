@@ -1,7 +1,6 @@
 // app.js
 var express = require('express');
 var bodyParser = require('body-parser');
-var qr_generator = require('qrcode-generator');
 var logger = require('morgan');
 
 
@@ -62,17 +61,8 @@ app_network.post('/', function(req, res) {
     // get the data received from the network
     var network_data = req.body.data;
 
-    // generate the qr-code
-    console.time('signee_generate_time');
-    var qr = qr_generator(0, 'L');
-    qr.addData(network_data);
-    qr.make();
-
-    var img_tag = qr.createImgTag(cellSize=12);
-    console.timeEnd('signee_generate_time');
-    
     // notify the browser which then sets the qr-code
-    io.sockets.emit('update_img', img_tag);
+    io.sockets.emit('update_img', network_data);
 
     var last_id = (last=Object.keys(connected_users))[last.length-1];
     var client = connected_users[last_id];
