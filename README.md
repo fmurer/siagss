@@ -23,4 +23,44 @@ node code/signee/app.js
 
 3. On both, the signer and the signee, browse to `localhost:3000`
 
-4. Send a POST request to http://ADDRESS_OF_SIGNEE:3001 with the data you want to send in the parameter `data`.
+4. Send a POST request to http://ADDRESS_OF_SIGNEE:3000 with the data you want to send in the parameter `data`.
+
+
+## Message Format
+
+Quick note on the desired message format.
+
+#### Network -> Signee:
+```
+data=DATA_TO_SIGN
+```
+where this is sent as a POST request.
+
+#### Signee -> Signer:
+```
+{
+    data: DATA_TO_SIGN,
+    mac: HMAC_OF_DATA
+}
+```
+
+#### Signer -> Signee:
+```
+{
+  msg: { assertion: { data: DATA_TO_SIGN,
+                     valid_from: DATE_IN_UTC_FORMAT,
+                     valid_until: DATE_IN_UTC_FORMAT },
+        signature: SIGNATURE_OF_ASSERTION },
+  mac: HMAC_OF_MSG
+}
+```
+
+#### Signee -> Network:
+```
+{
+ assertion: { data: DATA_TO_SIGN,
+              valid_from: DATE_IN_UTC_FORMAT,
+              valid_until: DATE_IN_UTC_FORMAT },
+  signature: SIGNATURE_OF_ASSERTION
+}
+```

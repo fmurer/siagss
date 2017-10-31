@@ -17,7 +17,7 @@ request='{"Subject": "1-16",\
 
 for i in {1..50}
 do
-    time $CURL -d "data=$request" http://localhost:3001;
+    time $CURL -d "data=$request" http://localhost:3000;
     echo "";
 done
 exit 0
