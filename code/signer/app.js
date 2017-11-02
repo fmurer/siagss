@@ -17,7 +17,6 @@ app.use(logger('dev'));
 
 const SHARED_KEY_PATH = __dirname + '/sk/auth_key';
 const SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH, 'ascii');
-const hmac = crypto.createHmac('sha256', SHARED_KEY);
 
 
 var keyPair = generateKeyPair();
@@ -43,9 +42,8 @@ app.post('/', function(req, res) {
     var data = incoming_request.data;
     var auth = incoming_request.auth;
 
-
     // check if the data is correct, i.e. not altered and coming from the signee
-    if (!verifyAuth(data, auth, 'sign')) {
+    if (!verifyAuth(data, auth, 'mac')) {
         res.json({error: "There has been an error! The authentication token could not be verified"});
         return;
     }
@@ -72,6 +70,7 @@ app.post('/', function(req, res) {
     respond_data['auth'] = generateAuthToken(JSON.stringify(msg), 'mac');
 
     console.log(respond_data);
+
     // send back response to the ajax success function which will then generate the qr code.
     res.json(respond_data);
 });
@@ -98,6 +97,7 @@ function signRequest(data) {
 function verifyAuth(msg, auth_token, method) {
     switch (method) {
         case 'mac':
+            hmac = crypto.createHmac('sha256', SHARED_KEY);
             hmac.update(msg);
             return auth_token == hmac.digest('hex');
         case 'sign':
@@ -115,6 +115,7 @@ function verifyAuth(msg, auth_token, method) {
 function generateAuthToken(msg, method) {
     switch (method) {
         case 'mac':
+            hmac = crypto.createHmac('sha256', SHARED_KEY);
             hmac.update(msg);
             return hmac.digest('hex');
         case 'sign':
