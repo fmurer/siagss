@@ -10,6 +10,9 @@
 # ignore the literature folder
 literature/*
 
+# ignore the shared key folder
+sk/
+
 # ignore Jetbrains files
 *.idea/
 *.iml

@@ -14,10 +14,11 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
-/*
-const SHARED_KEY_PATH = __dirname + '/sk/shared_key';
+
+const SHARED_KEY_PATH = __dirname + '/sk/auth_key';
 const SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH, 'ascii');
-*/
+const hmac = crypto.createHmac('sha256', SHARED_KEY);
+
 
 var keyPair = generateKeyPair();
 
@@ -30,9 +31,25 @@ app.get('/', function(req, res,next) {
 
 app.post('/', function(req, res) {
     // content of the qr-code read by the webcam
-    var incoming_request = req.body.qrcode;
+    var incoming_request = '';
+
+    // for testin purposes. In normal environment, should come as JSON parsable string.
+    try {
+        incoming_request = JSON.parse(req.body.qrcode);
+    } catch (e) {
+        incoming_request = { data: req.body.qrcode, auth: ''};
+    }
+
     var data = incoming_request.data;
-    var mac = incoming_request.mac;
+    var auth = incoming_request.auth;
+
+
+    // check if the data is correct, i.e. not altered and coming from the signee
+    if (!verifyAuth(data, auth, 'sign')) {
+        res.json({error: "There has been an error! The authentication token could not be verified"});
+        return;
+    }
+
 
     var respond_data = {};
     var msg = {};
@@ -47,14 +64,12 @@ app.post('/', function(req, res) {
 
     // sign the incoming request
     var signature = signRequest(to_sign);
-    // we need to convert it into a string in order to properly generate a QR-code out of it.
-    var base64_signature = Buffer.from(signature).toString('base64');
 
     msg['assertion'] = assertion;
-    msg['signature'] = base64_signature;
+    msg['signature'] = signature;
 
     respond_data['msg'] = msg;
-    respond_data['mac'] = '';
+    respond_data['auth'] = generateAuthToken(JSON.stringify(msg), 'mac');
 
     console.log(respond_data);
     // send back response to the ajax success function which will then generate the qr code.
@@ -65,30 +80,53 @@ server.listen(3000);
 
 
 
-
-/*
-    This is for testing purposes only. Can later be used for the verifier.
-*/
-function verify(message, publicKey) {
-    data = str2buf(JSON.stringify(message.assertion));
-    var signature = new Uint8Array(Buffer.from(message.signature, 'base64'));
-
-    if (curve.sign.detached.verify(data, signature, publicKey)) {
-        console.log("Verification SUCCESS");
-    } else {
-        console.log("Verification FAILED");
-    }
-}
-
 /*
     Sign the request and return the signature
 */
 function signRequest(data) {
     console.time('signing_time');
     var signature = curve.sign.detached(data, keyPair.secretKey);
+    signature = Buffer.from(signature).toString('hex');
     console.timeEnd('signing_time');
     return signature;
 }
+
+
+/*
+    verify authentication
+*/
+function verifyAuth(msg, auth_token, method) {
+    switch (method) {
+        case 'mac':
+            hmac.update(msg);
+            return auth_token == hmac.digest('hex');
+        case 'sign':
+            // TODO: use the right public key of the signee
+            return curve.sign.detached.verify(str2buf(msg), str2buf(auth_token), keyPair.publicKey);
+        default:
+            return verifyAuth(msg, auth_token, 'sign');
+    }
+}
+
+
+/*
+    generate the authentication token
+*/
+function generateAuthToken(msg, method) {
+    switch (method) {
+        case 'mac':
+            hmac.update(msg);
+            return hmac.digest('hex');
+        case 'sign':
+            // TODO: use another key for authentication
+            var signature = curve.sign.detached(msg, keyPair.secretKey);
+            signature = Buffer.from(signature).toString('hex');
+            return signature
+        default:
+            return generateAuthToken(msg, 'sign');
+    }
+}
+
 
 /*
     compute a validity range of length 'duration'.

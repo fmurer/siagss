@@ -9,7 +9,7 @@
         <script type="text/javascript" src="/socket.io/socket.io.js"></script>
     </head>
     <body>
-        <div id="container">
+        <div id="container" style="margin-top: 30px">
             <!-- Placeholder for the QR-Code -->
             <div id=qr_code>
                 <canvas width="auto" height="100%">
@@ -24,7 +24,9 @@
                     console.log("Hi from client");
                 });
                 socket.on('update_img', function(data) {
+                    console.time('signee_generate_time');
                     generateQRCode(data);
+                    console.timeEnd('signee_generate_time');
                 });
 
                 // Initialize the QR-Code scanner from the instascan library
