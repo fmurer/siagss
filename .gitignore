@@ -12,6 +12,7 @@ literature/*
 
 # ignore the shared key folder
 sk/
+pk/
 
 # ignore Jetbrains files
 *.idea/

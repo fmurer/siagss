@@ -15,11 +15,26 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
 
-const SHARED_KEY_PATH = __dirname + '/sk/auth_key';
-const SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH, 'ascii');
 
+const AUTH_METHOD = 'sign';
+const SECRET_KEY_PATH = __dirname + '/sk/';
+const PUBLIC_KEY_PATH = __dirname + '/pk/public_key_signee';
 
-var keyPair = generateKeyPair();
+var PUBLIC_KEY_SIGNEE = '';
+var SECRET_KEY_SIGNER = '';
+
+switch (AUTH_METHOD) {
+    case 'mac':
+        SECRET_KEY_SIGNER = fs.readFileSync(SECRET_KEY_PATH + 'auth_key');
+        break;
+    case 'sign':
+    default:
+        PUBLIC_KEY_SIGNEE = fs.readFileSync(PUBLIC_KEY_PATH, 'ascii');
+        SECRET_KEY_SIGNER = fs.readFileSync(SECRET_KEY_PATH + 'secret_key_signer', 'ascii');
+        break;
+}
+
+const SIGNING_KEY = generateKeyPair().secretKey
 
 /*
     handle requests
@@ -43,7 +58,7 @@ app.post('/', function(req, res) {
     var auth = incoming_request.auth;
 
     // check if the data is correct, i.e. not altered and coming from the signee
-    if (!verifyAuth(data, auth, 'mac')) {
+    if (!verifyAuth(data, auth, AUTH_METHOD)) {
         res.json({error: "There has been an error! The authentication token could not be verified"});
         return;
     }
@@ -67,7 +82,7 @@ app.post('/', function(req, res) {
     msg['signature'] = signature;
 
     respond_data['msg'] = msg;
-    respond_data['auth'] = generateAuthToken(JSON.stringify(msg), 'mac');
+    respond_data['auth'] = generateAuthToken(JSON.stringify(msg), AUTH_METHOD);
 
     console.log(respond_data);
 
@@ -84,7 +99,7 @@ server.listen(3000);
 */
 function signRequest(data) {
     console.time('signing_time');
-    var signature = curve.sign.detached(data, keyPair.secretKey);
+    var signature = curve.sign.detached(data, SIGNING_KEY);
     signature = Buffer.from(signature).toString('hex');
     console.timeEnd('signing_time');
     return signature;
@@ -97,14 +112,12 @@ function signRequest(data) {
 function verifyAuth(msg, auth_token, method) {
     switch (method) {
         case 'mac':
-            hmac = crypto.createHmac('sha256', SHARED_KEY);
+            hmac = crypto.createHmac('sha256', SECRET_KEY_SIGNER);
             hmac.update(msg);
             return auth_token == hmac.digest('hex');
         case 'sign':
-            // TODO: use the right public key of the signee
-            return curve.sign.detached.verify(str2buf(msg), str2buf(auth_token), keyPair.publicKey);
         default:
-            return verifyAuth(msg, auth_token, 'sign');
+            return curve.sign.detached.verify(str2buf(msg), str2buf(auth_token), str2buf(PUBLIC_KEY_SIGNEE));
     }
 }
 
@@ -119,12 +132,10 @@ function generateAuthToken(msg, method) {
             hmac.update(msg);
             return hmac.digest('hex');
         case 'sign':
-            // TODO: use another key for authentication
-            var signature = curve.sign.detached(msg, keyPair.secretKey);
+        default:
+            var signature = curve.sign.detached(str2buf(msg), str2buf(SECRET_KEY_SIGNER));
             signature = Buffer.from(signature).toString('hex');
             return signature
-        default:
-            return generateAuthToken(msg, 'sign');
     }
 }
 
@@ -167,6 +178,6 @@ function buf2str(buffer, encoding='ascii') {
     return Buffer.from(buffer).toString(encoding);
 }
 
-function str2buf(str) {
-    return new Uint8Array(Buffer.from(str));
+function str2buf(str, encoding='hex') {
+    return new Uint8Array(Buffer.from(str, encoding));
 }

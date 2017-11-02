@@ -16,12 +16,25 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
 
+const AUTH_METHOD = 'sign';
+const SECRET_KEY_PATH = __dirname + '/sk/';
+const PUBLIC_KEY_PATH = __dirname + '/pk/public_key_signer';
 
-const SHARED_KEY_PATH = __dirname + '/sk/auth_key';
-const SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH, 'ascii');
-const hmac = crypto.createHmac('sha256', SHARED_KEY);
+var PUBLIC_KEY_SIGNER = '';
+var SECRET_KEY_SIGNEE = '';
 
+switch (AUTH_METHOD) {
+    case 'mac':
+        SECRET_KEY_SIGNEE = fs.readFileSync(SECRET_KEY_PATH + 'auth_key');
+        break;
+    case 'sign':
+    default:
+        PUBLIC_KEY_SIGNER = fs.readFileSync(PUBLIC_KEY_PATH, 'ascii');
+        SECRET_KEY_SIGNEE = fs.readFileSync(SECRET_KEY_PATH + 'secret_key_signee', 'ascii');
+        break;
+}
 
+var hmac;
 
 /*
     Socket IO stuff
@@ -47,7 +60,7 @@ app.post('/', function(req, res) {
     // get the data received from the network
     var network_data = req.body.data;
 
-    var auth = generateAuthToken(network_data, 'sign');
+    var auth = generateAuthToken(network_data, AUTH_METHOD);
 
     var data_to_send = {};
     try {
@@ -66,6 +79,8 @@ app.post('/', function(req, res) {
     // handle the answer once a new qr-code has been scanned.
     client.on('answer', function(data) {
 
+        data = JSON.parse(data);
+
         var err = data.error;
         var msg = data.msg;
         var mac = data.auth;
@@ -76,12 +91,12 @@ app.post('/', function(req, res) {
         }
 
         // check if the data is correct, i.e. not altered and coming from the signer
-        if (!verifyAuth(JSON.stringify(msg), mac, 'sign')) {
+        if (!verifyAuth(JSON.stringify(msg), mac, AUTH_METHOD)) {
             res.end({error: "There has been an error! The authentication token could not be verified"});
             return;
         }
 
-        res.end(msg);
+        res.end(JSON.stringify(msg));
     });
 
 });
@@ -94,13 +109,13 @@ server.listen(3000);
 function verifyAuth(msg, auth_token, method) {
     switch (method) {
         case 'mac':
+            hmac = crypto.createHmac('sha256', SECRET_KEY_SIGNEE);
             hmac.update(msg);
             return auth_token == hmac.digest('hex');
-        case 'sign':
-            // TODO: use the right public key of the signee
-            return curve.sign.detached.verify(str2buf(msg), str2buf(auth_token), keyPair.publicKey);
         default:
-            return verifyAuth(msg, auth_token, 'sign');
+        case 'sign':
+            return curve.sign.detached.verify(str2buf(msg), str2buf(auth_token), str2buf(PUBLIC_KEY_SIGNER));
+
     }
 }
 
@@ -111,14 +126,24 @@ function verifyAuth(msg, auth_token, method) {
 function generateAuthToken(msg, method) {
     switch (method) {
         case 'mac':
+            hmac = crypto.createHmac('sha256', SHARED_KEY);
             hmac.update(msg);
             return hmac.digest('hex');
         case 'sign':
-            // TODO: use another key for authentication
-            var signature = curve.sign.detached(msg, keyPair.secretKey);
+        default:
+            var signature = curve.sign.detached(str2buf(msg), str2buf(SECRET_KEY_SIGNEE));
             signature = Buffer.from(signature).toString('hex');
             return signature
-        default:
-            return generateAuthToken(msg, 'sign');
     }
+}
+
+/*
+    Helper functions in order to convert between String and Uint8Array
+*/
+function buf2str(buffer, encoding='ascii') {
+    return Buffer.from(buffer).toString(encoding);
+}
+
+function str2buf(str, encoding='hex') {
+    return new Uint8Array(Buffer.from(str, encoding));
 }
