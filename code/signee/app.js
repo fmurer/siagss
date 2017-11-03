@@ -114,7 +114,7 @@ function verifyAuth(msg, auth_token, method) {
             return auth_token == hmac.digest('hex');
         default:
         case 'sign':
-            return curve.sign.detached.verify(str2buf(msg), str2buf(auth_token), str2buf(PUBLIC_KEY_SIGNER));
+            return curve.sign.detached.verify(str2buf(msg, 'ascii'), str2buf(auth_token, 'hex'), str2buf(PUBLIC_KEY_SIGNER, 'hex'));
 
     }
 }
@@ -131,7 +131,7 @@ function generateAuthToken(msg, method) {
             return hmac.digest('hex');
         case 'sign':
         default:
-            var signature = curve.sign.detached(str2buf(msg), str2buf(SECRET_KEY_SIGNEE));
+            var signature = curve.sign.detached(str2buf(msg, 'ascii'), str2buf(SECRET_KEY_SIGNEE, 'hex'));
             signature = Buffer.from(signature).toString('hex');
             return signature
     }
@@ -140,10 +140,14 @@ function generateAuthToken(msg, method) {
 /*
     Helper functions in order to convert between String and Uint8Array
 */
-function buf2str(buffer, encoding='ascii') {
+function buf2str(buffer, encoding) {
     return Buffer.from(buffer).toString(encoding);
 }
 
-function str2buf(str, encoding='hex') {
+function str2buf(str, encoding) {
     return new Uint8Array(Buffer.from(str, encoding));
+}
+
+function json2buf(json, encoding) {
+    return str2buf(JSON.stringify(json), encoding);
 }

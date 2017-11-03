@@ -47,22 +47,18 @@ app.post('/', function(req, res) {
     // content of the qr-code read by the webcam
     var incoming_request = '';
 
-    // for testin purposes. In normal environment, should come as JSON parsable string.
-    try {
-        incoming_request = JSON.parse(req.body.qrcode);
-    } catch (e) {
-        incoming_request = { data: req.body.qrcode, auth: ''};
-    }
+    incoming_request = JSON.parse(req.body.qrcode);
 
     var data = incoming_request.data;
     var auth = incoming_request.auth;
 
+    console.log(data);
+    //console.log(auth);
     // check if the data is correct, i.e. not altered and coming from the signee
     if (!verifyAuth(data, auth, AUTH_METHOD)) {
         res.json({error: "There has been an error! The authentication token could not be verified"});
         return;
     }
-
 
     var respond_data = {};
     var msg = {};
@@ -73,16 +69,14 @@ app.post('/', function(req, res) {
     assertion['valid_from'] = validity.from;
     assertion['valid_until'] = validity.until;
 
-    var to_sign = str2buf(JSON.stringify(assertion));
-
     // sign the incoming request
-    var signature = signRequest(to_sign);
+    var signature = signRequest(assertion);
 
     msg['assertion'] = assertion;
     msg['signature'] = signature;
 
     respond_data['msg'] = msg;
-    respond_data['auth'] = generateAuthToken(JSON.stringify(msg), AUTH_METHOD);
+    respond_data['auth'] = generateAuthToken(msg, AUTH_METHOD);
 
     console.log(respond_data);
 
@@ -99,7 +93,7 @@ server.listen(3000);
 */
 function signRequest(data) {
     console.time('signing_time');
-    var signature = curve.sign.detached(data, SIGNING_KEY);
+    var signature = curve.sign.detached(json2buf(data, encoding='ascii'), SIGNING_KEY);
     signature = Buffer.from(signature).toString('hex');
     console.timeEnd('signing_time');
     return signature;
@@ -117,7 +111,7 @@ function verifyAuth(msg, auth_token, method) {
             return auth_token == hmac.digest('hex');
         case 'sign':
         default:
-            return curve.sign.detached.verify(str2buf(msg), str2buf(auth_token), str2buf(PUBLIC_KEY_SIGNEE));
+            return curve.sign.detached.verify(str2buf(msg, encoding='ascii'), str2buf(auth_token, encoding='hex'), str2buf(PUBLIC_KEY_SIGNEE, encoding='hex'));
     }
 }
 
@@ -133,7 +127,7 @@ function generateAuthToken(msg, method) {
             return hmac.digest('hex');
         case 'sign':
         default:
-            var signature = curve.sign.detached(str2buf(msg), str2buf(SECRET_KEY_SIGNER));
+            var signature = curve.sign.detached(json2buf(msg, encoding='ascii'), str2buf(SECRET_KEY_SIGNER, encoding='hex'));
             signature = Buffer.from(signature).toString('hex');
             return signature
     }
@@ -174,10 +168,14 @@ function generateKeyPair() {
 /*
     Helper functions in order to convert between String and Uint8Array
 */
-function buf2str(buffer, encoding='ascii') {
+function buf2str(buffer, encoding) {
     return Buffer.from(buffer).toString(encoding);
 }
 
-function str2buf(str, encoding='hex') {
+function str2buf(str, encoding) {
     return new Uint8Array(Buffer.from(str, encoding));
+}
+
+function json2buf(json, encoding) {
+    return str2buf(JSON.stringify(json), encoding);
 }
