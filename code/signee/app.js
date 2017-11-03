@@ -10,6 +10,7 @@ var app = express();
 var server = require('http').createServer(app);
 var io = require('socket.io')(server);
 
+
 app.use(express.static(__dirname + '/node_modules'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -43,6 +44,7 @@ var hmac;
 var connected_users;
 
 io.on('connection', function(client) {
+    client.setMaxListeners(0);
     connected_users = {};
     var clientID = client.conn.id;
     connected_users[clientID] = client;
