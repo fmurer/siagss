@@ -25,7 +25,7 @@ fi
 for i in {1..50}
 do
 	request="{ 'IP': '192.168.0.$i', 'HOST': 'localhost$i'}";
-    time $CURL -d "data=$request" http://$1:3000;
+    time $CURL -d "data=$request" http://$1:3000 &
     echo "";
 done
 exit 0

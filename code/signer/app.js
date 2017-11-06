@@ -52,33 +52,34 @@ app.post('/', function(req, res) {
     var data = incoming_request.data;
     var auth = incoming_request.auth;
 
-    console.log(data);
-    //console.log(auth);
     // check if the data is correct, i.e. not altered and coming from the signee
     if (!verifyAuth(data, auth, AUTH_METHOD)) {
         res.json({error: "There has been an error! The authentication token could not be verified"});
         return;
     }
 
+    const NUM_OF_PARALLEL_REQ = 4;
     var respond_data = {};
-    var msg = {};
-    var assertion = {};
+    var msgs = {};
 
-    assertion['data'] = data;
     var validity = getValidityRange();
-    assertion['valid_from'] = validity.from;
-    assertion['valid_until'] = validity.until;
 
-    // sign the incoming request
-    var signature = signRequest(assertion);
+    for (var i = 0; i < NUM_OF_PARALLEL_REQ; i++) {
+        var assertion = {};
 
-    msg['assertion'] = assertion;
-    msg['signature'] = signature;
+        assertion['data'] = data['data'+i];
+        assertion['valid_from'] = validity.from;
+        assertion['valid_until'] = validity.until;
 
-    respond_data['msg'] = msg;
-    respond_data['auth'] = generateAuthToken(msg, AUTH_METHOD);
+        // sign the incoming request
+        var signature = signRequest(assertion);
 
-    console.log(respond_data);
+        msgs['msg'+i]['assertion'] = assertion;
+        msgs['msg'+i]['signature'] = signature;
+    }
+
+    respond_data['msgs'] = msgs;
+    respond_data['auth'] = generateAuthToken(msgs, AUTH_METHOD);
 
     // send back response to the ajax success function which will then generate the qr code.
     res.json(respond_data);
@@ -122,7 +123,7 @@ function verifyAuth(msg, auth_token, method) {
 function generateAuthToken(msg, method) {
     switch (method) {
         case 'mac':
-            hmac = crypto.createHmac('sha256', SHARED_KEY);
+            hmac = crypto.createHmac('sha256', SECRET_KEY_SIGNER);
             hmac.update(JSON.stringify(msg));
             return hmac.digest('hex');
         case 'sign':

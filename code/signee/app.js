@@ -6,10 +6,12 @@ var curve = require('tweetnacl');
 var crypto = require('crypto');
 var fs = require('fs');
 
+var events = require('events');
+
 var app = express();
 var server = require('http').createServer(app);
 var io = require('socket.io')(server);
-
+var eventEmitter = new events.EventEmitter();
 
 app.use(express.static(__dirname + '/node_modules'));
 app.use(bodyParser.json());
@@ -58,21 +60,53 @@ app.get('/', function(req, res,next) {
     res.sendFile(__dirname + '/index.html');
 });
 
+
+var requests = [];
+
 app.post('/', function(req, res) {
     // get the data received from the network
     var network_data = req.body.data;
 
-    var auth = generateAuthToken(network_data, AUTH_METHOD);
+    /*
+        testing with queue
+    */
+    requests.push({req: req, res: res});
+    if (requests.length % NUM_OF_PARALLEL_REQ == 0) {
+        eventEmitter.emit('handle_requests');
+    }
+
+});
+
+server.listen(3000);
+
+const NUM_OF_PARALLEL_REQ = 4;
+var busy = false;
+
+eventEmitter.on('handle_requests', requestHandler);
+/*
+    handler that handles the requests
+*/
+function requestHandler() {
+
+    while (busy) {
+
+    }
+    busy = true;
+
+    var req_res = {};
+    var data = {};
+
+
+    for (var i = 0; i < NUM_OF_PARALLEL_REQ; i++) {
+
+        req_res[i] = requests.shift();
+        data['data' + i] = req_res[i].req.body.data;
+    }
 
     var data_to_send = {};
-    try {
-        data_to_send['data'] = JSON.parse(network_data);
-    } catch (e) {
-        data_to_send['data'] = network_data;
-    }
-    data_to_send['auth'] = auth;
+    data_to_send['data'] = data;
+    data_to_send['auth'] = generateAuthToken(JSON.stringify(data), AUTH_METHOD);
 
-    // notify the browser which then sets the qr-code
     io.sockets.emit('update_img', JSON.stringify(data_to_send));
 
     var last_id = (last=Object.keys(connected_users))[last.length-1];
@@ -84,26 +118,34 @@ app.post('/', function(req, res) {
         data = JSON.parse(data);
 
         var err = data.error;
-        var msg = data.msg;
+        var msgs = data.msgs;
         var mac = data.auth;
 
         if (err) {
-            res.end(data);
-            return;
+            for (var i = 0; i < NUM_OF_PARALLEL_REQ; i++) {
+                req_res[i].res.end(data);
+            }
         }
 
         // check if the data is correct, i.e. not altered and coming from the signer
-        if (!verifyAuth(JSON.stringify(msg), mac, AUTH_METHOD)) {
-            res.end({error: "There has been an error! The authentication token could not be verified"});
-            return;
+        if (!verifyAuth(JSON.stringify(msgs), mac, AUTH_METHOD)) {
+            for (var i = 0; i < NUM_OF_PARALLEL_REQ; i++) {
+                req_res[i].res.end({error: "There has been an error! The authentication token could not be verified"});
+            }
         }
 
-        res.end(JSON.stringify(msg));
+        msgs = JSON.parse(msgs);
+
+        // send back actual response
+        for (var i = 0; i < NUM_OF_PARALLEL_REQ; i++) {
+            req_res[i].res.json(msgs['msg' + i]);
+        }
     });
 
-});
+    busy = false;
 
-server.listen(3000);
+}
+
 
 /*
     verify authentication
@@ -128,7 +170,7 @@ function verifyAuth(msg, auth_token, method) {
 function generateAuthToken(msg, method) {
     switch (method) {
         case 'mac':
-            hmac = crypto.createHmac('sha256', SHARED_KEY);
+            hmac = crypto.createHmac('sha256', SECRET_KEY_SIGNEE);
             hmac.update(msg);
             return hmac.digest('hex');
         case 'sign':

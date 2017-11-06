@@ -78,7 +78,7 @@
                     // background color or image element, null for transparent background
                     background: null,
                     // content
-                    text: data,
+                    text: '',
                     // corner radius relative to module width: 0.0 .. 0.5
                     radius: 0,
                     // quiet zone in modules
@@ -98,8 +98,9 @@
                     fontcolor: '#000',
                     image: null
                 };
-                
+
                 function generateQRCode(data) {
+                    options['text'] = data;
                     $('#qr_code').empty().qrcode(options);
                 }
             </script>
