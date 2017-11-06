@@ -17,7 +17,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
 
-const AUTH_METHOD = 'sign';
+const AUTH_METHOD = 'mac';
 const SECRET_KEY_PATH = __dirname + '/sk/';
 const PUBLIC_KEY_PATH = __dirname + '/pk/public_key_signer';
 
