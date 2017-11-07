@@ -54,7 +54,9 @@ app.post('/', function(req, res) {
 
     // check if the data is correct, i.e. not altered and coming from the signee
     if (!verifyAuth(data, auth, AUTH_METHOD)) {
-        res.json({error: "There has been an error! The authentication token could not be verified"});
+        error = {};
+        error['error'] = 'There has been an error! The authentication token could not be verified!';
+        res.json(error);
         return;
     }
 

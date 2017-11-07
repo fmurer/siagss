@@ -71,7 +71,10 @@ app.post('/', function(req, res) {
         testing with queue
     */
     requests.push({req: req, res: res});
-    if (requests.length % NUM_OF_PARALLEL_REQ == 0) {
+
+    console.log("number of requests: " + requests.length);
+    
+    if ((requests.length >= NUM_OF_PARALLEL_REQ ) && !busy) {
         eventEmitter.emit('handle_requests');
     }
 
@@ -88,9 +91,6 @@ eventEmitter.on('handle_requests', requestHandler);
 */
 function requestHandler() {
 
-    while (busy) {
-
-    }
     busy = true;
 
     var req_res = {};
@@ -98,7 +98,6 @@ function requestHandler() {
 
 
     for (var i = 0; i < NUM_OF_PARALLEL_REQ; i++) {
-
         req_res[i] = requests.shift();
         data['data' + i] = req_res[i].req.body.data;
     }
@@ -117,21 +116,25 @@ function requestHandler() {
 
         data = JSON.parse(data);
 
-        var err = data.error;
+        var error = data.error;
         var msgs = data.msgs;
         var mac = data.auth;
 
-        if (err) {
+        if (error) {
             for (var i = 0; i < NUM_OF_PARALLEL_REQ; i++) {
-                req_res[i].res.end(data);
+                req_res[i].res.end(error);
             }
+            return;
         }
 
         // check if the data is correct, i.e. not altered and coming from the signer
         if (!verifyAuth(JSON.stringify(msgs), mac, AUTH_METHOD)) {
             for (var i = 0; i < NUM_OF_PARALLEL_REQ; i++) {
-                req_res[i].res.end({error: "There has been an error! The authentication token could not be verified"});
+                error = {};
+                error['error'] = 'There has been an error! The authentication token could not be verified!';
+                req_res[i].res.end(JSON.stringify(error));
             }
+            return;
         }
 
         msgs = JSON.parse(msgs);
