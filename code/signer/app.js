@@ -30,7 +30,6 @@ switch (AUTH_METHOD) {
     case 'sign':
     default:
         PUBLIC_KEY_SIGNEE = fs.readFileSync(PUBLIC_KEY_PATH, 'ascii');
-        SECRET_KEY_SIGNER = fs.readFileSync(SECRET_KEY_PATH + 'secret_key_signer', 'ascii');
         break;
 }
 
@@ -44,39 +43,38 @@ app.get('/', function(req, res,next) {
 });
 
 app.post('/', function(req, res) {
-    // content of the qr-code read by the webcam
-    var incoming_request = '';
 
     incoming_request = JSON.parse(req.body.qrcode);
 
     var data = incoming_request.data;
     var auth = incoming_request.auth;
 
-    console.log(data);
-    //console.log(auth);
     // check if the data is correct, i.e. not altered and coming from the signee
-    if (!verifyAuth(data, auth, AUTH_METHOD)) {
-        res.json({error: "There has been an error! The authentication token could not be verified"});
+    if (!verifyAuth(JSON.stringify(data), auth, AUTH_METHOD)) {
+        var error = {};
+        error['error'] = 'There has been an error! The authentication token could not be verified';
+        res.json(error);
         return;
     }
 
     var respond_data = {};
-    var msg = {};
     var assertion = {};
 
-    assertion['data'] = data;
-    var validity = getValidityRange();
+    assertion['data'] = data.data;
+
+    from = toDate(data.from);
+    to = toDate(data.to);
+    var validity = getValidityRange(from, to);
+
+
     assertion['valid_from'] = validity.from;
     assertion['valid_until'] = validity.until;
 
     // sign the incoming request
     var signature = signRequest(assertion);
 
-    msg['assertion'] = assertion;
-    msg['signature'] = signature;
-
-    respond_data['msg'] = msg;
-    respond_data['auth'] = generateAuthToken(msg, AUTH_METHOD);
+    respond_data['assertion'] = assertion;
+    respond_data['signature'] = signature;
 
     console.log(respond_data);
 
@@ -116,36 +114,23 @@ function verifyAuth(msg, auth_token, method) {
 }
 
 
-/*
-    generate the authentication token
-*/
-function generateAuthToken(msg, method) {
-    switch (method) {
-        case 'mac':
-            hmac = crypto.createHmac('sha256', SHARED_KEY);
-            hmac.update(JSON.stringify(msg));
-            return hmac.digest('hex');
-        case 'sign':
-        default:
-            var signature = curve.sign.detached(json2buf(msg, encoding='ascii'), str2buf(SECRET_KEY_SIGNER, encoding='hex'));
-            signature = Buffer.from(signature).toString('hex');
-            return signature
-    }
-}
-
-
-/*
-    compute a validity range of length 'duration'.
-    Default is 10 days from today.
-    ATTENTION: when changing 'duration', then also set the 'startdate'
-*/
-function getValidityRange(startdate=0, duration=10) {
+function getValidityRange(startdate, enddate, MAX_DURATION=20) {
     validity = {};
+    var today = new Date();
 
-    var valid_from = new Date();
-    valid_from.setDate(valid_from.getDate() + startdate);
+    // no start date in the past
+    if (startdate < today) {
+        startdate = today;
+    }
+
+    var valid_from = startdate;
     var valid_until = new Date();
-    valid_until.setDate(valid_from.getDate() + duration);
+
+    if (timeDifference(startdate, enddate) < MAX_DURATION) {
+        valid_until = enddate;
+    } else {
+        valid_until.setDate(valid_from.getDate() + MAX_DURATION);
+    }
 
     validity['from'] = Date.parse(valid_from.toUTCString());
     validity['until'] = Date.parse(valid_until.toUTCString());
@@ -165,8 +150,9 @@ function generateKeyPair() {
     return curve.sign.keyPair();
 }
 
+
 /*
-    Helper functions in order to convert between String and Uint8Array
+    SOME HELPER FUNCTIONS
 */
 function buf2str(buffer, encoding) {
     return Buffer.from(buffer).toString(encoding);
@@ -178,4 +164,14 @@ function str2buf(str, encoding) {
 
 function json2buf(json, encoding) {
     return str2buf(JSON.stringify(json), encoding);
+}
+
+function toDate(str, delim='/') {
+    var parts = str.split(delim);
+    return new Date(parts[2], parts[1] - 1, parts[0]);
+}
+
+function timeDifference(date1, date2) {
+    var timeDiff = Math.abs(date2.getTime() - date1.getTime());
+    return Math.ceil(timeDiff / (1000 * 3600 * 24));
 }

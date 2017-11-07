@@ -32,14 +32,16 @@ Quick note on the desired message format.
 
 #### Network -> Signee:
 ```
-data=DATA_TO_SIGN
+data=DATA_TO_SIGN&from=VALID_FROM&to=VALID_TO
 ```
 where this is sent as a POST request.
 
 #### Signee -> Signer:
 ```
 {
-    data: DATA_TO_SIGN,
+    data: { data: DATA_TO_SIGN,
+            from: VALID_FROM,
+            to: VALID_TO },
     mac: HMAC_OF_DATA
 }
 ```
@@ -48,9 +50,9 @@ where this is sent as a POST request.
 ```
 {
   msg: { assertion: { data: DATA_TO_SIGN,
-                     valid_from: DATE_IN_UTC_FORMAT,
-                     valid_until: DATE_IN_UTC_FORMAT },
-        signature: SIGNATURE_OF_ASSERTION },
+                      valid_from: DATE_IN_UTC_FORMAT,
+                      valid_until: DATE_IN_UTC_FORMAT },
+         signature: SIGNATURE_OF_ASSERTION },
   mac: HMAC_OF_MSG
 }
 ```

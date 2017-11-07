@@ -31,7 +31,6 @@ switch (AUTH_METHOD) {
     case 'sign':
     default:
         PUBLIC_KEY_SIGNER = fs.readFileSync(PUBLIC_KEY_PATH, 'ascii');
-        SECRET_KEY_SIGNEE = fs.readFileSync(SECRET_KEY_PATH + 'secret_key_signee', 'ascii');
         break;
 }
 
@@ -61,17 +60,24 @@ app.get('/', function(req, res,next) {
 app.post('/', function(req, res) {
     // get the data received from the network
     var network_data = req.body.data;
+    var network_from = req.body.from;
+    var network_to = req.body.to;
 
-    var auth = generateAuthToken(network_data, AUTH_METHOD);
+    var data = {};
+    data['data'] = network_data;
+    data['from'] = network_from;
+    data['to'] = network_to;
+
+    console.log(data);
+
+    var auth = generateAuthToken(JSON.stringify(data), AUTH_METHOD);
 
     var data_to_send = {};
-    try {
-        data_to_send['data'] = JSON.parse(network_data);
-    } catch (e) {
-        data_to_send['data'] = network_data;
-    }
+    data_to_send['data'] = data;
     data_to_send['auth'] = auth;
 
+    console.log(data_to_send);
+    
     // notify the browser which then sets the qr-code
     io.sockets.emit('update_img', JSON.stringify(data_to_send));
 
@@ -80,46 +86,13 @@ app.post('/', function(req, res) {
 
     // handle the answer once a new qr-code has been scanned.
     client.on('answer', function(data) {
-
-        data = JSON.parse(data);
-
-        var err = data.error;
-        var msg = data.msg;
-        var mac = data.auth;
-
-        if (err) {
-            res.end(data);
-            return;
-        }
-
-        // check if the data is correct, i.e. not altered and coming from the signer
-        if (!verifyAuth(JSON.stringify(msg), mac, AUTH_METHOD)) {
-            res.end({error: "There has been an error! The authentication token could not be verified"});
-            return;
-        }
-
-        res.end(JSON.stringify(msg));
+        res.end(data);
     });
 
 });
 
 server.listen(3000);
 
-/*
-    verify authentication
-*/
-function verifyAuth(msg, auth_token, method) {
-    switch (method) {
-        case 'mac':
-            hmac = crypto.createHmac('sha256', SECRET_KEY_SIGNEE);
-            hmac.update(msg);
-            return auth_token == hmac.digest('hex');
-        default:
-        case 'sign':
-            return curve.sign.detached.verify(str2buf(msg, 'ascii'), str2buf(auth_token, 'hex'), str2buf(PUBLIC_KEY_SIGNER, 'hex'));
-
-    }
-}
 
 
 /*
@@ -128,7 +101,7 @@ function verifyAuth(msg, auth_token, method) {
 function generateAuthToken(msg, method) {
     switch (method) {
         case 'mac':
-            hmac = crypto.createHmac('sha256', SHARED_KEY);
+            hmac = crypto.createHmac('sha256', SECRET_KEY_SIGNEE);
             hmac.update(msg);
             return hmac.digest('hex');
         case 'sign':
