@@ -58,6 +58,12 @@ app.get('/', function(req, res,next) {
 });
 
 app.post('/', function(req, res) {
+
+    if (req.body.data == 'pairing') {
+        pairSystems(req, res);
+        return;
+    }
+
     // get the data received from the network
     var network_data = req.body.data;
     var network_from = req.body.from;
@@ -77,7 +83,7 @@ app.post('/', function(req, res) {
     data_to_send['auth'] = auth;
 
     console.log(data_to_send);
-    
+
     // notify the browser which then sets the qr-code
     io.sockets.emit('update_img', JSON.stringify(data_to_send));
 
@@ -94,7 +100,23 @@ app.post('/', function(req, res) {
 server.listen(3000);
 
 
+function pairSystems(req, res) {
 
+    console.log("PAIRING");
+
+    var hash = crypto.createHash('sha256');
+    var cur_time = new Date();
+    var day = cur_time.getDate();
+    var hour = cur_time.getHours();
+    var min = cur_time.getMinutes();
+
+    hash.update(day.toString() + ":" + hour.toString() + ":" + min.toString());
+
+    var shared_key = curve.sign.keyPair.fromSeed(str2buf(hash.digest('hex'), 'hex')).secretKey;
+    shared_key = Buffer.from(shared_key).toString('hex');
+    
+    res.end();
+}
 /*
     generate the authentication token
 */

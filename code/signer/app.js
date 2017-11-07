@@ -44,6 +44,11 @@ app.get('/', function(req, res,next) {
 
 app.post('/', function(req, res) {
 
+    if (req.body.data == 'pairing') {
+        pairSystems(req, res);
+        return;
+    }
+
     incoming_request = JSON.parse(req.body.qrcode);
 
     var data = incoming_request.data;
@@ -84,6 +89,13 @@ app.post('/', function(req, res) {
 
 server.listen(3000);
 
+
+
+function pairSystems(req, res) {
+
+    console.log("PAIRING");
+    res.end();
+}
 
 
 /*

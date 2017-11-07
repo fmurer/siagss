@@ -100,6 +100,23 @@
                     };
                     $('#qr_code').empty().qrcode(options);
                 }
+
+                $(this).on('keypress', function(event) {
+                    // if key 'p' is pressed
+                    if (event.keyCode == 112) {
+                        data = {};
+                        data['data'] = 'pairing';
+                        $.ajax({
+                            type: 'POST',
+                            data: JSON.stringify(data),
+                            contentType: 'application/json',
+                            url: '/',
+                            success: function(data) {
+                                console.log("paired the systems");
+                            }
+                        });
+                    }
+                });
             </script>
         </div>
     </body>
