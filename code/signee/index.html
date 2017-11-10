@@ -11,11 +11,16 @@
         <div id="container" style="margin-top: 30px">
             <!-- Placeholder for the QR-Code -->
             <div id=qr_code>
-                <canvas width="auto" height="100%">
+                <canvas id="canvas" width="auto" height="100%">
             </div>
 
             <!-- Handling update from Server -->
             <script>
+
+                function clear_canvas() {
+                    console.log("clear canvase");
+                    document.getElementById('qr_code').innerHTML = '';
+                }
 
                 // Handling the notifications of the server when there is a new message arriving
                 var socket = io.connect('http://localhost:3000');
@@ -26,6 +31,9 @@
                     console.time('signee_generate_time');
                     generateQRCode(data);
                     console.timeEnd('signee_generate_time');
+                });
+                socket.on('clear', function(data) {
+                    clear_canvas();
                 });
 
                 // Initialize the QR-Code scanner from the instascan library

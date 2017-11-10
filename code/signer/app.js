@@ -94,7 +94,25 @@ server.listen(3000);
 function pairSystems(req, res) {
 
     console.log("PAIRING");
-    res.end();
+
+    var hash = crypto.createHash('sha256');
+
+    var coeff = 1000*5; // 5000ms -> 5s
+    var date = new Date();
+    var cur_time = new Date(Math.ceil(date.getTime() / coeff) * coeff);
+
+    var day = cur_time.getDate();
+    var hour = cur_time.getHours();
+    var min = cur_time.getMinutes();
+    var sec = cur_time.getSeconds();
+
+    hash.update(day.toString() + ":" + hour.toString() + ":" + min.toString() + ":" + sec.toString());
+
+    var shared_key = curve.sign.keyPair.fromSeed(str2buf(hash.digest('hex'), 'hex')).secretKey;
+    shared_key = Buffer.from(shared_key).toString('hex');
+
+    SECRET_KEY_SIGNER = shared_key;
+    res.end()
 }
 
 
