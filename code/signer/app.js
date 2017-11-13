@@ -110,7 +110,7 @@ function verifyAuth(msg, auth_token, method) {
     switch (method) {
         case 'mac':
             hmac = crypto.createHmac('sha256', SECRET_KEY_SIGNER);
-            hmac.update(msg);
+            hmac.update(JSON.stringify(msg));
             return auth_token == hmac.digest('hex');
         case 'sign':
         default:
