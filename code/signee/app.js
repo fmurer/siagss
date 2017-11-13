@@ -6,11 +6,11 @@ var curve = require('tweetnacl');
 var crypto = require('crypto');
 var fs = require('fs');
 const { exec } = require('child_process');
+var asyn = require('async');
 
 var app = express();
 var server = require('http').createServer(app);
 var io = require('socket.io')(server);
-
 
 app.use(express.static(__dirname + '/node_modules'));
 app.use(bodyParser.json());
@@ -58,6 +58,21 @@ app.get('/', function(req, res,next) {
     res.sendFile(__dirname + '/index.html');
 });
 
+
+var RequestArray = function() {
+    var array = [];
+    array.push = function() {
+        return Array.prototype.push.apply(this, arguments);
+    };
+
+    array.pop = function() {
+        return Array.prototype.shift.apply(this, arguments);
+    };
+
+    return array;
+};
+var requests = new RequestArray();
+
 app.post('/', function(req, res) {
 
     if (req.body.data == 'pairing') {
@@ -65,41 +80,85 @@ app.post('/', function(req, res) {
         return;
     }
 
-    // get the data received from the network
-    var network_data = req.body.data;
-    var network_from = req.body.from;
-    var network_to = req.body.to;
+    requests.push({req: req, res: res});
 
-    var data = {};
-    data['data'] = network_data;
-    data['from'] = network_from;
-    data['to'] = network_to;
-
-    console.log(data);
-
-    var auth = generateAuthToken(JSON.stringify(data), AUTH_METHOD);
-
-    var data_to_send = {};
-    data_to_send['data'] = data;
-    data_to_send['auth'] = auth;
-
-    console.log(data_to_send);
-
-    // notify the browser which then sets the qr-code
-    io.sockets.emit('update_img', JSON.stringify(data_to_send));
-
-    var last_id = (last=Object.keys(connected_users))[last.length-1];
-    var client = connected_users[last_id];
-
-    // handle the answer once a new qr-code has been scanned.
-    client.on('answer', function(data) {
-        res.end(data);
-    });
+    console.log("number of requests: " + requests.length);
 
 });
 
 server.listen(3000);
 
+
+const NUM_REQUESTS_TOGETHER = 1;
+
+/*
+    handler that handles the requests
+*/
+asyn.forever(
+    function requestHandler(next) {
+
+        if (requests.length >= NUM_REQUESTS_TOGETHER) {
+
+
+            var req_res = {};
+            var data = {};
+
+
+            for (var i = 0; i < NUM_REQUESTS_TOGETHER; i++) {
+                req_res[i] = requests.pop();
+                
+                // get the data received from the network
+                var network_data = req_res[i].req.body.data;
+                var network_from = req_res[i].req.body.from;
+                var network_to = req_res[i].req.body.to;
+
+                var req_data = {};
+                req_data['data'] = network_data;
+                req_data['from'] = network_from;
+                req_data['to'] = network_to;
+
+                data['data' + i] = req_data;
+            }
+
+            var data_to_send = {};
+            data_to_send['data'] = data;
+            data_to_send['auth'] = generateAuthToken(JSON.stringify(data), AUTH_METHOD);;
+
+            console.log(data_to_send);
+
+            // notify the browser which then sets the qr-code
+            io.sockets.emit('update_img', JSON.stringify(data_to_send));
+
+            var last_id = (last = Object.keys(connected_users))[last.length - 1];
+            var client = connected_users[last_id];
+
+            // handle the answer once a new qr-code has been scanned.
+            client.on('answer', function(data) {
+
+                data = JSON.parse(data);
+
+                var error = data.error;
+                var msgs = data.msgs;
+                var mac = data.auth;
+
+                // send back actual response
+                for (var i = 0; i < NUM_REQUESTS_TOGETHER; i++) {
+                    console.log("SEND: " + msgs['msg' + i]);
+                    req_res[i].res.json(msgs['msg' + i]);
+                }
+
+                next();
+            });
+        } else {
+            next();
+        }
+    },
+    function finished(err) {
+        if (err) {
+            console.log(err);
+        }
+    }
+);
 
 function pairSystems(req, res) {
 
@@ -110,7 +169,6 @@ function pairSystems(req, res) {
     var coeff = 1000*5; // 5000ms -> 5s
     var date = new Date();
     var cur_time = new Date(Math.ceil((date.getTime()) / coeff) * coeff);
-
     var day = cur_time.getDate();
     var hour = cur_time.getHours();
     var min = cur_time.getMinutes();
