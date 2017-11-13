@@ -27,7 +27,7 @@ class Mutex {
         console.log("MUTEX: EXECUTING");
         console.log("BUSY: " + this._busy);
         task();
-        this._busy = false;
+        //this._busy = false;
     }
 }
 
