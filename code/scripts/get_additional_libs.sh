@@ -11,8 +11,8 @@ if [[ "$unamestr" == 'Linux' ]]; then
     wget $jquery_qrcode_url
 elif [[ "$unamestr" == 'Darwin' ]]; then
     CURL='/usr/bin/curl'
-    $CURL -O $instascan_url
-    $CURL -O $jquery_qrcode_url
+    $CURL -L -O $instascan_url
+    $CURL -L -O $jquery_qrcode_url
 fi
 
 echo "[***]    Create directories"
@@ -29,3 +29,6 @@ cp ./jquery-qrcode.min.js ../signee/node_modules/jquery_qrcode/
 echo "[***]    Copy files to Signer"
 cp ./instascan.min.js ../signer/node_modules/instascan/
 cp ./jquery-qrcode.min.js ../signer/node_modules/jquery_qrcode/
+
+rm ./instascan.min.js
+rm ./jquery-qrcode.min.js

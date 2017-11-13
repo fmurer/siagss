@@ -27,7 +27,8 @@ do
 	data="{ 'IP': '192.168.0.$i', 'HOST': 'localhost$i'}";
     from="07/11/2017";
     to="07/12/2017";
-    time $CURL -d "data=$data&from=$from&to=$to" http://$1:3000;
+    $CURL -d "data=$data&from=$from&to=$to" http://$1:3000 &
+    sleep 0.5
     echo "";
 done
 exit 0
