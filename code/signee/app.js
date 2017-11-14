@@ -59,28 +59,16 @@ app.get('/', function(req, res,next) {
 });
 
 
-var RequestArray = function() {
-    var array = [];
-    array.push = function() {
-        return Array.prototype.push.apply(this, arguments);
-    };
+var requests = [];
 
-    array.pop = function() {
-        return Array.prototype.shift.apply(this, arguments);
-    };
+app.post('/', function(request, response) {
 
-    return array;
-};
-var requests = new RequestArray();
-
-app.post('/', function(req, res) {
-
-    if (req.body.data == 'pairing') {
-        pairSystems(req, res);
+    if (request.body.data == 'pairing') {
+        pairSystems(request, response);
         return;
     }
 
-    requests.push({req: req, res: res});
+    requests.push({req: request, res: response});
 
     console.log("number of requests: " + requests.length);
 
@@ -100,13 +88,13 @@ asyn.forever(
         if (requests.length >= NUM_REQUESTS_TOGETHER) {
 
 
-            var req_res = {};
+            var req_res = [];
             var data = {};
 
 
             for (var i = 0; i < NUM_REQUESTS_TOGETHER; i++) {
-                req_res[i] = requests.pop();
-                
+                req_res[i] = requests.shift();
+
                 // get the data received from the network
                 var network_data = req_res[i].req.body.data;
                 var network_from = req_res[i].req.body.from;
@@ -124,7 +112,7 @@ asyn.forever(
             data_to_send['data'] = data;
             data_to_send['auth'] = generateAuthToken(JSON.stringify(data), AUTH_METHOD);;
 
-            console.log(data_to_send);
+            //console.log(data_to_send);
 
             // notify the browser which then sets the qr-code
             io.sockets.emit('update_img', JSON.stringify(data_to_send));
@@ -139,12 +127,26 @@ asyn.forever(
 
                 var error = data.error;
                 var msgs = data.msgs;
-                var mac = data.auth;
+
+                if (error) {
+                    console.log("I WAS HERE");
+                    for (var i = 0; i < NUM_REQUESTS_TOGETHER; i++) {
+                        error = {};
+                        error['error'] = 'There has been an error! The authentication token could not be verified!'
+                        req_res[i].res.json(error);
+                        break;
+                    }
+                    return;
+                }
 
                 // send back actual response
                 for (var i = 0; i < NUM_REQUESTS_TOGETHER; i++) {
-                    console.log("SEND: " + msgs['msg' + i]);
-                    req_res[i].res.json(msgs['msg' + i]);
+                    try {
+                        req_res[i].res.json(msgs['msg' + i]);
+                    } catch (e) {
+                        // TODO: see why there are so many requests
+                    }
+                    break;
                 }
 
                 next();

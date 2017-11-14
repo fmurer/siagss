@@ -57,7 +57,7 @@ app.post('/', function(req, res) {
     var auth = incoming_request.auth;
 
     // check if the data is correct, i.e. not altered and coming from the signee
-    if (!verifyAuth(JSON.stringify(data), auth, AUTH_METHOD)) {
+    if (!verifyAuth(data, auth, AUTH_METHOD)) {
         var error = {};
         error['error'] = 'There has been an error! The authentication token could not be verified';
         res.json(error);
@@ -74,7 +74,7 @@ app.post('/', function(req, res) {
         to = toDate(data['data'+i].to);
         var validity = getValidityRange(from, to);
 
-        assertion['data'] = data['data'+i];
+        assertion['data'] = data['data'+i].data;
         assertion['valid_from'] = validity.from;
         assertion['valid_until'] = validity.until;
 
@@ -85,7 +85,6 @@ app.post('/', function(req, res) {
     }
 
     respond_data['msgs'] = msgs;
-    respond_data['auth'] = generateAuthToken(msgs, AUTH_METHOD);
 
     // send back response to the ajax success function which will then generate the qr code.
     res.json(respond_data);
