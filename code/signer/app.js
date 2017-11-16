@@ -36,7 +36,6 @@ switch (AUTH_METHOD) {
 const SIGNING_KEY = generateKeyPair().secretKey
 
 
-var NUM_REQUESTS_TOGETHER = 1;
 /*
     handle requests
 */
@@ -65,26 +64,20 @@ app.post('/', function(req, res) {
     }
 
     var respond_data = {};
-    var msgs = {};
+    var assertion = {};
 
-    for (var i = 0; i < NUM_REQUESTS_TOGETHER; i++) {
-        var assertion = {};
+    from = toDate(data['from']);
+    to = toDate(data['to']);
+    var validity = getValidityRange(from, to);
 
-        from = toDate(data['data'+i].from);
-        to = toDate(data['data'+i].to);
-        var validity = getValidityRange(from, to);
+    assertion['data'] = data['data'];
+    assertion['valid_from'] = validity.from;
+    assertion['valid_until'] = validity.until;
 
-        assertion['data'] = data['data'+i].data;
-        assertion['valid_from'] = validity.from;
-        assertion['valid_until'] = validity.until;
+    var signature = signRequest(assertion);
 
-        var signature = signRequest(assertion);
-
-        msgs['msg'+i]['assertion'] = assertion;
-        msgs['msg'+i]['signature'] = signature;
-    }
-
-    respond_data['msgs'] = msgs;
+    respond_data['assertion'] = assertion;
+    respond_data['signature'] = signature;
 
     // send back response to the ajax success function which will then generate the qr code.
     res.json(respond_data);

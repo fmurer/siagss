@@ -59,7 +59,7 @@ app.get('/', function(req, res,next) {
 });
 
 
-var requests = [];
+var request_queue = asyn.queue(requestHandler, 1);
 
 app.post('/', function(request, response) {
 
@@ -68,7 +68,7 @@ app.post('/', function(request, response) {
         return;
     }
 
-    requests.push({req: request, res: response});
+    request_queue.push({req: request, res: response});
 
     console.log("number of requests: " + requests.length);
 
@@ -77,90 +77,66 @@ app.post('/', function(request, response) {
 server.listen(3000);
 
 
-const NUM_REQUESTS_TOGETHER = 1;
-
+var busy = false
 /*
     handler that handles the requests
 */
-asyn.forever(
-    function requestHandler(next) {
+function requestHandler(req_res, finish) {
 
-        if (requests.length >= NUM_REQUESTS_TOGETHER) {
+    busy = true;
+
+    var req = req_res.req;
+    var res = req_res.res;
+
+    var data = {};
+
+    // get the data received from the network
+    var network_data = req.body.data;
+    var network_from = req.body.from;
+    var network_to = req.body.to;
+
+    data['data'] = network_data;
+    data['from'] = network_from;
+    data['to'] = network_to;
 
 
-            var req_res = [];
-            var data = {};
+    var data_to_send = {};
+    data_to_send['data'] = data;
+    data_to_send['auth'] = generateAuthToken(JSON.stringify(data), AUTH_METHOD);;
 
+    //console.log(data_to_send);
 
-            for (var i = 0; i < NUM_REQUESTS_TOGETHER; i++) {
-                req_res[i] = requests.shift();
+    // notify the browser which then sets the qr-code
+    io.sockets.emit('update_img', JSON.stringify(data_to_send));
 
-                // get the data received from the network
-                var network_data = req_res[i].req.body.data;
-                var network_from = req_res[i].req.body.from;
-                var network_to = req_res[i].req.body.to;
+    var last_id = (last = Object.keys(connected_users))[last.length - 1];
+    var client = connected_users[last_id];
 
-                var req_data = {};
-                req_data['data'] = network_data;
-                req_data['from'] = network_from;
-                req_data['to'] = network_to;
+    // handle the answer once a new qr-code has been scanned.
+    client.on('answer', function(data) {
 
-                data['data' + i] = req_data;
-            }
+        data = JSON.parse(data);
 
-            var data_to_send = {};
-            data_to_send['data'] = data;
-            data_to_send['auth'] = generateAuthToken(JSON.stringify(data), AUTH_METHOD);;
+        var error = data.error;
 
-            //console.log(data_to_send);
-
-            // notify the browser which then sets the qr-code
-            io.sockets.emit('update_img', JSON.stringify(data_to_send));
-
-            var last_id = (last = Object.keys(connected_users))[last.length - 1];
-            var client = connected_users[last_id];
-
-            // handle the answer once a new qr-code has been scanned.
-            client.on('answer', function(data) {
-
-                data = JSON.parse(data);
-
-                var error = data.error;
-                var msgs = data.msgs;
-
-                if (error) {
-                    console.log("I WAS HERE");
-                    for (var i = 0; i < NUM_REQUESTS_TOGETHER; i++) {
-                        error = {};
-                        error['error'] = 'There has been an error! The authentication token could not be verified!'
-                        req_res[i].res.json(error);
-                        break;
-                    }
-                    return;
-                }
-
-                // send back actual response
-                for (var i = 0; i < NUM_REQUESTS_TOGETHER; i++) {
-                    try {
-                        req_res[i].res.json(msgs['msg' + i]);
-                    } catch (e) {
-                        // TODO: see why there are so many requests
-                    }
-                    break;
-                }
-
-                next();
-            });
-        } else {
-            next();
+        if (error) {
+            console.log("I WAS HERE");
+            error = {};
+            error['error'] = 'There has been an error! The authentication token could not be verified!'
+            res.json(error);
+            return;
         }
-    },
-    function finished(err) {
-        if (err) {
-            console.log(err);
-        }
-    }
-);
+
+        // send back actual response
+
+        res.json(data);
+
+        busy = false;
+    });
+
+    while (busy) {}
+    finish();
+}
 
 function pairSystems(req, res) {
 
