@@ -47,7 +47,8 @@ io.on('connection', function(client) {
     client.setMaxListeners(0);
 
     client.on('answer', (data) => {
-        console.log(data);
+        data = JSON.parse(data);
+
         const cb = callbacks.get(data.id);
         if (!cb) {
             return client.emit("error", "process with this ID not found: " + data.id);
@@ -118,7 +119,7 @@ function requestHandler(data) {
 }
 
 function returnResponse(data, res) {
-    data = JSON.parse(data);
+    //data = JSON.parse(data);
     //var res = res_req.res;
 
     var error = data.error;
@@ -133,14 +134,13 @@ function returnResponse(data, res) {
 
     // send back actual response
 
-    try {
-        res.json(data);
-    } catch (e) {
+    // strip the id
+    var answer = {};
+    answer['assertion'] = data.assertion;
+    answer['signature'] = data.signature;
 
-    }
 
-    console.log("Right before finish");
-    //finish();
+    res.json(answer);
 }
 
 function pairSystems(req, res) {
