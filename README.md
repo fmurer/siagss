@@ -39,6 +39,7 @@ where this is sent as a POST request.
 #### Signee -> Signer:
 ```
 {
+    id: SOME_UNIQUE_ID,
     data: { data: DATA_TO_SIGN,
             from: VALID_FROM,
             to: VALID_TO },
@@ -49,20 +50,20 @@ where this is sent as a POST request.
 #### Signer -> Signee:
 ```
 {
-  msg: { assertion: { data: DATA_TO_SIGN,
-                      valid_from: DATE_IN_UTC_FORMAT,
-                      valid_until: DATE_IN_UTC_FORMAT },
-         signature: SIGNATURE_OF_ASSERTION },
-  mac: HMAC_OF_MSG
+    id: SOME_UNIQUE_ID,
+    assertion: { data: DATA_TO_SIGN,
+                 valid_from: DATE_IN_UTC_FORMAT,
+                 valid_until: DATE_IN_UTC_FORMAT },
+    signature: SIGNATURE_OF_ASSERTION },
 }
 ```
 
 #### Signee -> Network:
 ```
 {
- assertion: { data: DATA_TO_SIGN,
-              valid_from: DATE_IN_UTC_FORMAT,
-              valid_until: DATE_IN_UTC_FORMAT },
-  signature: SIGNATURE_OF_ASSERTION
+    assertion: { data: DATA_TO_SIGN,
+                 valid_from: DATE_IN_UTC_FORMAT,
+                 valid_until: DATE_IN_UTC_FORMAT },
+    signature: SIGNATURE_OF_ASSERTION
 }
 ```
