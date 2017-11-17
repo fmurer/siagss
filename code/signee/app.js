@@ -5,8 +5,6 @@ var logger = require('morgan');
 var curve = require('tweetnacl');
 var crypto = require('crypto');
 var fs = require('fs');
-const { exec } = require('child_process');
-var asyn = require('async');
 
 var app = express();
 var server = require('http').createServer(app);
@@ -18,22 +16,8 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
 
-const AUTH_METHOD = 'mac';
-const SECRET_KEY_PATH = __dirname + '/sk/';
-const PUBLIC_KEY_PATH = __dirname + '/pk/public_key_signer';
-
-var PUBLIC_KEY_SIGNER = '';
-var SECRET_KEY_SIGNEE = '';
-
-switch (AUTH_METHOD) {
-    case 'mac':
-        SECRET_KEY_SIGNEE = fs.readFileSync(SECRET_KEY_PATH + 'auth_key');
-        break;
-    case 'sign':
-    default:
-        PUBLIC_KEY_SIGNER = fs.readFileSync(PUBLIC_KEY_PATH, 'ascii');
-        break;
-}
+const SHARED_KEY_PATH = __dirname + '/sk/';
+var SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH + 'auth_key');
 
 var hmac;
 
@@ -112,7 +96,7 @@ function requestHandler(data) {
 
     var data_to_send = {};
     data_to_send['data'] = data;
-    data_to_send['auth'] = generateAuthToken(JSON.stringify(data), AUTH_METHOD);;
+    data_to_send['auth'] = generateAuthToken(JSON.stringify(data));;
 
     // notify the browser which then sets the qr-code
     io.sockets.emit('update_img', JSON.stringify(data_to_send));
@@ -143,6 +127,7 @@ function returnResponse(data, res) {
     res.json(answer);
 }
 
+
 function pairSystems(req, res) {
 
     console.log("PAIRING");
@@ -152,6 +137,12 @@ function pairSystems(req, res) {
     var coeff = 1000*5; // 5000ms -> 5s
     var date = new Date();
     var cur_time = new Date(Math.ceil((date.getTime()) / coeff) * coeff);
+
+    var to_send = {};
+    to_send['pair'] = cur_time.toString();
+    // TODO: authentication
+    io.sockets.emit('update_img', JSON.stringify(to_send));
+
     var day = cur_time.getDate();
     var hour = cur_time.getHours();
     var min = cur_time.getMinutes();
@@ -162,7 +153,8 @@ function pairSystems(req, res) {
     var shared_key = curve.sign.keyPair.fromSeed(str2buf(hash.digest('hex'), 'hex')).secretKey;
     shared_key = Buffer.from(shared_key).toString('hex');
 
-    SECRET_KEY_SIGNEE = shared_key;
+    SHARED_KEY = shared_key;
+    fs.writeFileSync(SHARED_KEY_PATH + 'auth_key', SHARED_KEY)
     res.end();
 }
 
@@ -170,18 +162,10 @@ function pairSystems(req, res) {
 /*
     generate the authentication token
 */
-function generateAuthToken(msg, method) {
-    switch (method) {
-        case 'mac':
-            hmac = crypto.createHmac('sha256', SECRET_KEY_SIGNEE);
-            hmac.update(msg);
-            return hmac.digest('hex');
-        case 'sign':
-        default:
-            var signature = curve.sign.detached(str2buf(msg, 'ascii'), str2buf(SECRET_KEY_SIGNEE, 'hex'));
-            signature = Buffer.from(signature).toString('hex');
-            return signature
-    }
+function generateAuthToken(msg) {
+    hmac = crypto.createHmac('sha256', SHARED_KEY);
+    hmac.update(msg);
+    return hmac.digest('hex');
 }
 
 /*

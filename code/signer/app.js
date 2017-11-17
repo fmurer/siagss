@@ -16,23 +16,8 @@ app.use(logger('dev'));
 
 
 
-const AUTH_METHOD = 'mac';
-const SECRET_KEY_PATH = __dirname + '/sk/';
-const PUBLIC_KEY_PATH = __dirname + '/pk/public_key_signee';
-
-var PUBLIC_KEY_SIGNEE = '';
-var SECRET_KEY_SIGNER = '';
-
-switch (AUTH_METHOD) {
-    case 'mac':
-        SECRET_KEY_SIGNER = fs.readFileSync(SECRET_KEY_PATH + 'auth_key');
-        break;
-    case 'sign':
-    default:
-        PUBLIC_KEY_SIGNEE = fs.readFileSync(PUBLIC_KEY_PATH, 'ascii');
-        break;
-}
-
+const SHARED_KEY_PATH = __dirname + '/sk/';
+var SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH + 'auth_key');
 const SIGNING_KEY = generateKeyPair().secretKey
 
 
@@ -45,18 +30,18 @@ app.get('/', function(req, res,next) {
 
 app.post('/', function(req, res) {
 
-    if (req.body.data == 'pairing') {
+    incoming_request = JSON.parse(req.body.qrcode);
+
+    if (incoming_request.pair) {
         pairSystems(req, res);
         return;
     }
-
-    incoming_request = JSON.parse(req.body.qrcode);
 
     var data = incoming_request.data;
     var auth = incoming_request.auth;
 
     // check if the data is correct, i.e. not altered and coming from the signee
-    if (!verifyAuth(data, auth, AUTH_METHOD)) {
+    if (!verifyAuth(data, auth)) {
         var error = {};
         error['error'] = 'There has been an error! The authentication token could not be verified';
         res.json(error);
@@ -94,9 +79,10 @@ function pairSystems(req, res) {
 
     var hash = crypto.createHash('sha256');
 
-    var coeff = 1000*5; // 5000ms -> 5s
-    var date = new Date();
-    var cur_time = new Date(Math.ceil(date.getTime() / coeff) * coeff);
+    var new_date = JSON.parse(req.body.qrcode).pair;
+    console.log(new_date);
+
+    var cur_time = new Date(new_date);
 
     var day = cur_time.getDate();
     var hour = cur_time.getHours();
@@ -108,7 +94,8 @@ function pairSystems(req, res) {
     var shared_key = curve.sign.keyPair.fromSeed(str2buf(hash.digest('hex'), 'hex')).secretKey;
     shared_key = Buffer.from(shared_key).toString('hex');
 
-    SECRET_KEY_SIGNER = shared_key;
+    SHARED_KEY = shared_key
+    fs.writeFileSync(SHARED_KEY_PATH + 'auth_key', SHARED_KEY);
     res.end()
 }
 
@@ -128,15 +115,10 @@ function signRequest(data) {
 /*
     verify authentication
 */
-function verifyAuth(msg, auth_token, method) {
-    switch (method) {
-        case 'mac':
-            hmac = crypto.createHmac('sha256', SECRET_KEY_SIGNER);
-            hmac.update(JSON.stringify(msg));
-            return auth_token == hmac.digest('hex');
-        case 'sign':
-        default:
-            return curve.sign.detached.verify(str2buf(msg, encoding='ascii'), str2buf(auth_token, encoding='hex'), str2buf(PUBLIC_KEY_SIGNEE, encoding='hex'));
+function verifyAuth(msg, auth_token) {
+        hmac = crypto.createHmac('sha256', SHARED_KEY);
+        hmac.update(JSON.stringify(msg));
+        return auth_token == hmac.digest('hex');
     }
 }
 
