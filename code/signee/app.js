@@ -41,13 +41,26 @@ var hmac;
     Socket IO stuff
 */
 
-var connected_users;
+const callbacks = new Map();
 
 io.on('connection', function(client) {
     client.setMaxListeners(0);
-    connected_users = {};
-    var clientID = client.conn.id;
-    connected_users[clientID] = client;
+
+    client.on('answer', (data) => {
+        console.log(data);
+        const cb = callbacks.get(data.id);
+        if (!cb) {
+            return client.emit("error", "process with this ID not found: " + data.id);
+        }
+        cb(data);
+        callbacks.delete(data.id);
+        const new_request = request_queue.shift();
+        if (new_request) {
+            requestHandler(new_request);
+        } else {
+            request_number = 0;
+        }
+    });
 });
 
 
@@ -59,7 +72,8 @@ app.get('/', function(req, res,next) {
 });
 
 
-var request_queue = asyn.queue(requestHandler, 1);
+var request_queue = [];
+var request_number = 0;
 
 app.post('/', function(request, response) {
 
@@ -68,74 +82,65 @@ app.post('/', function(request, response) {
         return;
     }
 
-    request_queue.push({req: request, res: response});
+    // generate request id
+    var hash = crypto.createHash('sha256');
+    var data = request.body;
+    hash.update(JSON.stringify(data));
+    data['id'] = hash.digest('hex');
 
-    console.log("number of requests: " + requests.length);
+    callbacks.set(data.id, (data) => {
+        returnResponse(data, response);
+    });
+
+    if (request_number == 0) {
+        requestHandler(data);
+        request_number = 1;
+    } else {
+        request_queue.push(data);
+    }
 
 });
 
 server.listen(3000);
 
 
-var busy = false
 /*
     handler that handles the requests
 */
-function requestHandler(req_res, finish) {
-
-    busy = true;
-
-    var req = req_res.req;
-    var res = req_res.res;
-
-    var data = {};
-
-    // get the data received from the network
-    var network_data = req.body.data;
-    var network_from = req.body.from;
-    var network_to = req.body.to;
-
-    data['data'] = network_data;
-    data['from'] = network_from;
-    data['to'] = network_to;
-
+function requestHandler(data) {
 
     var data_to_send = {};
     data_to_send['data'] = data;
     data_to_send['auth'] = generateAuthToken(JSON.stringify(data), AUTH_METHOD);;
 
-    //console.log(data_to_send);
-
     // notify the browser which then sets the qr-code
     io.sockets.emit('update_img', JSON.stringify(data_to_send));
+}
 
-    var last_id = (last = Object.keys(connected_users))[last.length - 1];
-    var client = connected_users[last_id];
+function returnResponse(data, res) {
+    data = JSON.parse(data);
+    //var res = res_req.res;
 
-    // handle the answer once a new qr-code has been scanned.
-    client.on('answer', function(data) {
+    var error = data.error;
 
-        data = JSON.parse(data);
+    if (error) {
+        console.log("I WAS HERE");
+        error = {};
+        error['error'] = 'There has been an error! The authentication token could not be verified!'
+        res.json(error);
+        finish("There was an error");
+    }
 
-        var error = data.error;
+    // send back actual response
 
-        if (error) {
-            console.log("I WAS HERE");
-            error = {};
-            error['error'] = 'There has been an error! The authentication token could not be verified!'
-            res.json(error);
-            return;
-        }
-
-        // send back actual response
-
+    try {
         res.json(data);
+    } catch (e) {
 
-        busy = false;
-    });
+    }
 
-    while (busy) {}
-    finish();
+    console.log("Right before finish");
+    //finish();
 }
 
 function pairSystems(req, res) {

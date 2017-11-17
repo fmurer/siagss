@@ -76,6 +76,7 @@ app.post('/', function(req, res) {
 
     var signature = signRequest(assertion);
 
+    respond_data['id'] = data['id'];
     respond_data['assertion'] = assertion;
     respond_data['signature'] = signature;
 
