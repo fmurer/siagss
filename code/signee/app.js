@@ -69,6 +69,7 @@ app.post('/', function(request, response) {
     if (request.body.data == 'pairing') {
         pairSystemsSetup(request, response);
         response.end();
+        return;
     }
 
     // generate request id
@@ -134,56 +135,27 @@ function pairSystemsSetup(req, res) {
 
     console.log("PAIRING");
 
-    var hash = crypto.createHash('sha256');
-
     // prepare for DH
-    dh = crypto.createDiffieHellman(2048);
-    var signee_key = dh.generateKeys('hex');
-
-    var prime = dh.getPrime('hex');
-    var generator = dh.getGenerator('hex');
+    // use ECDH because it is much faster than normal DH from crypto library
+    dh = crypto.createECDH('secp521r1');
+    var signee_key = dh.generateKeys('hex', 'compressed');
 
     var dh_exchange = {};
-    dh_exchange['prime'] = prime;
-    dh_exchange['generator'] = generator;
     dh_exchange['signee_key'] = signee_key;
 
     io.sockets.emit('update_img', JSON.stringify(dh_exchange));
 
-
-
-    /*
-    var coeff = 1000*5; // 5000ms -> 5s
-    var date = new Date();
-    var cur_time = new Date(Math.ceil((date.getTime()) / coeff) * coeff);
-
-    var to_send = {};
-    to_send['pair'] = cur_time.toString();
-    // TODO: authentication
-    io.sockets.emit('update_img', JSON.stringify(to_send));
-
-    var day = cur_time.getDate();
-    var hour = cur_time.getHours();
-    var min = cur_time.getMinutes();
-    var sec = cur_time.getSeconds();
-
-    hash.update(day.toString() + ":" + hour.toString() + ":" + min.toString() + ":" + sec.toString());
-
-    var shared_key = curve.sign.keyPair.fromSeed(str2buf(hash.digest('hex'), 'hex')).secretKey;
-    shared_key = Buffer.from(shared_key).toString('hex');
-    */
-
-    //SHARED_KEY = shared_key;
-    //fs.writeFileSync(SHARED_KEY_PATH + 'auth_key', SHARED_KEY)
-    //res.end();
 }
 
 function pairSystemsGenKey(data) {
     data = JSON.parse(data);
 
-    var shared_key = dh.computeSecret(data.signer_key);
+    var shared_key = dh.computeSecret(data.signer_key, 'hex', 'hex');
+
+    // suboptimal to shorten key
     SHARED_KEY = shared_key;
-    //fs.writeFileSync(SHARED_KEY_PATH + 'auth_key', SHARED_KEY);
+    console.log(SHARED_KEY);
+    fs.writeFileSync(SHARED_KEY_PATH + 'auth_key', SHARED_KEY);
 }
 
 /*
