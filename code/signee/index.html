@@ -28,9 +28,7 @@
                     console.log("Hi from client");
                 });
                 socket.on('update_img', function(data) {
-                    console.time('signee_generate_time');
                     generateQRCode(data);
-                    console.timeEnd('signee_generate_time');
                 });
                 socket.on('clear', function(data) {
                     clear_canvas();
@@ -52,7 +50,12 @@
                 // function is executed. This sends an Ajax POST request with the read data to the
                 // index page. This request gets handled from the Node.js backend.
                 scanner.addListener('scan', function(content) {
-                    socket.emit('answer', content);
+                    var json = JSON.parse(content);
+                    if (json.signer_key) {
+                        socket.emit('pair', content);
+                    } else {
+                        socket.emit('answer', content);
+                    }
                 });
 
                 // choose the camera

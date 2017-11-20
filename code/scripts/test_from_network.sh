@@ -14,7 +14,7 @@ do
     from="07/11/2017";
     to="07/12/2017";
     $CURL -d "data=$data&from=$from&to=$to" http://$1:3000 &
-    sleep 0.5
-    echo "";
+    #sleep 0.5
+    #echo "";
 done
 exit 0

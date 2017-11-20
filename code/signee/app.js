@@ -35,7 +35,7 @@ io.on('connection', function(client) {
 
         const cb = callbacks.get(data.id);
         if (!cb) {
-            return client.emit("error", "process with this ID not found: " + data.id);
+            return;
         }
         cb(data);
         callbacks.delete(data.id);
@@ -45,6 +45,10 @@ io.on('connection', function(client) {
         } else {
             request_number = 0;
         }
+    });
+
+    client.on('pair', (data) => {
+        pairSystemsGenKey(data);
     });
 });
 
@@ -63,8 +67,8 @@ var request_number = 0;
 app.post('/', function(request, response) {
 
     if (request.body.data == 'pairing') {
-        pairSystems(request, response);
-        return;
+        pairSystemsSetup(request, response);
+        response.end();
     }
 
     // generate request id
@@ -103,17 +107,14 @@ function requestHandler(data) {
 }
 
 function returnResponse(data, res) {
-    //data = JSON.parse(data);
-    //var res = res_req.res;
 
     var error = data.error;
 
     if (error) {
-        console.log("I WAS HERE");
         error = {};
         error['error'] = 'There has been an error! The authentication token could not be verified!'
         res.json(error);
-        finish("There was an error");
+        return;
     }
 
     // send back actual response
@@ -127,13 +128,31 @@ function returnResponse(data, res) {
     res.json(answer);
 }
 
+var dh;
 
-function pairSystems(req, res) {
+function pairSystemsSetup(req, res) {
 
     console.log("PAIRING");
 
     var hash = crypto.createHash('sha256');
 
+    // prepare for DH
+    dh = crypto.createDiffieHellman(2048);
+    var signee_key = dh.generateKeys('hex');
+
+    var prime = dh.getPrime('hex');
+    var generator = dh.getGenerator('hex');
+
+    var dh_exchange = {};
+    dh_exchange['prime'] = prime;
+    dh_exchange['generator'] = generator;
+    dh_exchange['signee_key'] = signee_key;
+
+    io.sockets.emit('update_img', JSON.stringify(dh_exchange));
+
+
+
+    /*
     var coeff = 1000*5; // 5000ms -> 5s
     var date = new Date();
     var cur_time = new Date(Math.ceil((date.getTime()) / coeff) * coeff);
@@ -152,12 +171,20 @@ function pairSystems(req, res) {
 
     var shared_key = curve.sign.keyPair.fromSeed(str2buf(hash.digest('hex'), 'hex')).secretKey;
     shared_key = Buffer.from(shared_key).toString('hex');
+    */
 
-    SHARED_KEY = shared_key;
-    fs.writeFileSync(SHARED_KEY_PATH + 'auth_key', SHARED_KEY)
-    res.end();
+    //SHARED_KEY = shared_key;
+    //fs.writeFileSync(SHARED_KEY_PATH + 'auth_key', SHARED_KEY)
+    //res.end();
 }
 
+function pairSystemsGenKey(data) {
+    data = JSON.parse(data);
+
+    var shared_key = dh.computeSecret(data.signer_key);
+    SHARED_KEY = shared_key;
+    //fs.writeFileSync(SHARED_KEY_PATH + 'auth_key', SHARED_KEY);
+}
 
 /*
     generate the authentication token

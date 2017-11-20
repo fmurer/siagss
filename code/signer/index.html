@@ -38,9 +38,7 @@
                         url: '/',
                         success: function(data) {
                             if (counter == 0 && data != "") {
-                                console.time('signer_generate_time');
                                 generateQRCode(JSON.stringify(data));
-                                console.timeEnd('signer_generate_time');
                                 counter += 1;
                             }
                         }

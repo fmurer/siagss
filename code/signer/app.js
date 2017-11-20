@@ -32,7 +32,7 @@ app.post('/', function(req, res) {
 
     incoming_request = JSON.parse(req.body.qrcode);
 
-    if (incoming_request.pair) {
+    if (incoming_request.prime) {
         pairSystems(req, res);
         return;
     }
@@ -77,10 +77,20 @@ function pairSystems(req, res) {
 
     console.log("PAIRING");
 
+    var data = JSON.parse(req.body.qrcode);
+
+    var dh = crypto.createDiffieHellman(data.prime, data.generator);
+    var signer_key = dh.generateKeys('hex');
+
+    var shared_key = dh.computeSecret(data.signee_key);
+
+    var dh_exchange = {};
+    dh_exchange['signer_key'] = signer_key;
+
+    /*
     var hash = crypto.createHash('sha256');
 
     var new_date = JSON.parse(req.body.qrcode).pair;
-    console.log(new_date);
 
     var cur_time = new Date(new_date);
 
@@ -93,10 +103,12 @@ function pairSystems(req, res) {
 
     var shared_key = curve.sign.keyPair.fromSeed(str2buf(hash.digest('hex'), 'hex')).secretKey;
     shared_key = Buffer.from(shared_key).toString('hex');
+    */
 
     SHARED_KEY = shared_key
-    fs.writeFileSync(SHARED_KEY_PATH + 'auth_key', SHARED_KEY);
-    res.end()
+    //fs.writeFileSync(SHARED_KEY_PATH + 'auth_key', SHARED_KEY);
+    //res.end()
+    res.json(dh_exchange);
 }
 
 
@@ -116,10 +128,9 @@ function signRequest(data) {
     verify authentication
 */
 function verifyAuth(msg, auth_token) {
-        hmac = crypto.createHmac('sha256', SHARED_KEY);
-        hmac.update(JSON.stringify(msg));
-        return auth_token == hmac.digest('hex');
-    }
+    hmac = crypto.createHmac('sha256', SHARED_KEY);
+    hmac.update(JSON.stringify(msg));
+    return auth_token == hmac.digest('hex');
 }
 
 
