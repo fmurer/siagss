@@ -80,7 +80,7 @@ function pairSystems(req, res) {
     var data = JSON.parse(req.body.qrcode);
 
     var dh = crypto.createECDH('secp521r1');
-    var signer_key = ch.generateKeys('hex', 'compressed');
+    var signer_key = dh.generateKeys('hex', 'compressed');
 
     var shared_key = dh.computeSecret(data.signee_key, 'hex', 'hex');
 

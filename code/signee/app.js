@@ -79,7 +79,7 @@ app.post('/', function(request, response) {
     data['id'] = hash.digest('hex');
 
     callbacks.set(data.id, (data) => {
-        returnResponse(data, response);
+        returnResponse(data, request, response);
     });
 
     if (request_number == 0) {
@@ -101,20 +101,34 @@ function requestHandler(data) {
 
     var data_to_send = {};
     data_to_send['data'] = data;
+    console.time('auth_token_generation_time');
     data_to_send['auth'] = generateAuthToken(JSON.stringify(data));;
+    console.timeEnd('auth_token_generation_time');
 
     // notify the browser which then sets the qr-code
     io.sockets.emit('update_img', JSON.stringify(data_to_send));
 }
 
-function returnResponse(data, res) {
+function returnResponse(data, req, res) {
 
     var error = data.error;
 
     if (error) {
-        error = {};
-        error['error'] = 'There has been an error! The authentication token could not be verified!'
-        res.json(error);
+
+        // generate request id
+        var hash = crypto.createHash('sha256');
+        var data_orig = req.body;
+        hash.update(JSON.stringify(data_orig));
+        data_orig['id'] = hash.digest('hex');
+
+        // reissue the request on authentication failure
+        callbacks.set(data_orig.id, (data) => {
+            returnResponse(data, req, res);
+        });
+        // prioritize the request and push it to the front of the request_queue
+        //request_queue.push(data_orig)
+        request_queue.unshift(data_orig)
+
         return;
     }
 
