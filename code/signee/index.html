@@ -9,11 +9,18 @@
     </head>
     <body style="text-align: center;">
         <div id="container" style="margin-top: 30px">
+
+            <table style="width: 100%;">
+                <td style="width: 25%;"></td>
+                <td id="qr_code"><canvas id="canvas" width="auto" height="100%"></td>
+                <td id="info" style="width: 25%; text-align: left; display: block; padding-left: 20pt;"></td>
+            </table>
             <!-- Placeholder for the QR-Code -->
+            <!--
             <div id=qr_code>
                 <canvas id="canvas" width="auto" height="100%">
             </div>
-
+            -->
             <!-- Handling update from Server -->
             <script>
 
@@ -22,12 +29,23 @@
                     document.getElementById('qr_code').innerHTML = '';
                 }
 
+                function show_info(action, data) {
+                    data = JSON.parse(data);
+                    var info = action.toUpperCase() + "<br><br>"
+
+                    info += JSON.stringify(data, null, "    ");
+
+                    document.getElementById('info').innerHTML = info;
+                }
+
                 // Handling the notifications of the server when there is a new message arriving
                 var socket = io.connect('http://localhost:3000');
                 socket.on('connect', function(data) {
                     console.log("Hi from client");
                 });
                 socket.on('update_img', function(data) {
+                    show_info("Received data from network", data);
+                    //document.getElementById('info').innerHTML = show_info(data);
                     console.time('qr_generation_time');
                     generateQRCode(data);
                     console.timeEnd('qr_generation_time');
@@ -56,6 +74,7 @@
                     if (json.signer_key) {
                         socket.emit('pair', content);
                     } else {
+                        show_info("received answer from signer", content);
                         socket.emit('answer', content);
                     }
                 });

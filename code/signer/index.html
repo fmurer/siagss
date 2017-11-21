@@ -9,11 +9,29 @@
     <body style="text-align: center;">
         <div id="container" style="margin-top: 30px">
             <!-- Placeholder for the QR-Code -->
+
+            <table style="width: 100%;">
+                <td style="width: 25%;"></td>
+                <td id="qr_code"><canvas id="canvas" width="auto" height="100%"></td>
+                <td id="info" style="width: 25%; text-align: left; display: block; padding-left: 20pt;"></td>
+            </table>
+            <!--
             <div id=qr_code>
                 <canvas width="auto" height="100%">
             </div>
+            -->
 
             <script type="text/javascript">
+
+                function show_info(action, data) {
+                    data = JSON.parse(data);
+                    var info = action.toUpperCase() + "<br><br>"
+
+                    info += JSON.stringify(data, null, "    ");
+
+                    document.getElementById('info').innerHTML = info;
+                }
+
                 // Initialize the QR-Code scanner from the instascan library
                 opts = {
                     continuous: true,
@@ -30,13 +48,14 @@
                 // function is executed. This sends an Ajax POST request with the read data to the
                 // index page. This request gets handled from the Node.js backend.
                 scanner.addListener('scan', function(content) {
-                    var counter = 0;
+                    show_info("received data from signee", content);
                     $.ajax({
                         type: 'POST',
                         data: JSON.stringify({qrcode: content}),
                         contentType: 'application/json',
                         url: '/',
                         success: function(data) {
+                            show_info("signed data", data);
                             console.time('qr_generation_time');
                             generateQRCode(JSON.stringify(data));
                             console.timeEnd('qr_generation_time');

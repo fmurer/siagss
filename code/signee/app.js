@@ -166,7 +166,6 @@ function pairSystemsGenKey(data) {
 
     var shared_key = dh.computeSecret(data.signer_key, 'hex', 'hex');
 
-    // suboptimal to shorten key
     SHARED_KEY = shared_key;
     console.log(SHARED_KEY);
     fs.writeFileSync(SHARED_KEY_PATH + 'auth_key', SHARED_KEY);

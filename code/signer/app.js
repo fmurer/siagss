@@ -128,7 +128,9 @@ function getValidityRange(startdate, enddate, MAX_DURATION=20) {
     var valid_from = startdate;
     var valid_until = new Date();
 
-    if (timeDifference(startdate, enddate) < MAX_DURATION) {
+    var diff = timeDifference(startdate, enddate);
+    
+    if ( diff < MAX_DURATION && diff > 0 ) {
         valid_until = enddate;
     } else {
         valid_until.setDate(valid_from.getDate() + MAX_DURATION);
@@ -169,8 +171,12 @@ function json2buf(json, encoding) {
 }
 
 function toDate(str, delim='/') {
-    var parts = str.split(delim);
-    return new Date(parts[2], parts[1] - 1, parts[0]);
+    if (str) {
+        var parts = str.split(delim);
+        return new Date(parts[2], parts[1] - 1, parts[0]);
+    } else {
+        return new Date();
+    }
 }
 
 function timeDifference(date1, date2) {
