@@ -11,29 +11,19 @@
         <div id="container" style="margin-top: 30px">
 
             <table style="width: 100%;">
-                <td style="width: 25%;"></td>
-                <td id="qr_code"><canvas id="canvas" width="auto" height="100%"></td>
-                <td id="info" style="width: 25%; text-align: left; display: block; padding-left: 20pt;"></td>
+                <td id="qr_code" style="padding-left: 40pt;"><canvas id="canvas" width="auto" height="100%"></td>
+                <td id="info" style="width: auto; text-align: left; display: block; padding-left: 20pt;"></td>
             </table>
-            <!-- Placeholder for the QR-Code -->
-            <!--
-            <div id=qr_code>
-                <canvas id="canvas" width="auto" height="100%">
-            </div>
-            -->
+
             <!-- Handling update from Server -->
             <script>
-
-                function clear_canvas() {
-                    console.log("clear canvase");
-                    document.getElementById('qr_code').innerHTML = '';
-                }
-
-                function show_info(action, data) {
+                function show_info(preinfo, action, data) {
                     data = JSON.parse(data);
-                    var info = action.toUpperCase() + "<br><br>"
 
-                    info += JSON.stringify(data, null, "    ");
+                    var info = preinfo + "<br><br>";
+                    info += action.toUpperCase() + "<br><br>";
+
+                    info += "<pre>" + JSON.stringify(data, null, 4) + "</pre>";
 
                     document.getElementById('info').innerHTML = info;
                 }
@@ -44,14 +34,11 @@
                     console.log("Hi from client");
                 });
                 socket.on('update_img', function(data) {
-                    show_info("Received data from network", data);
+                    show_info("", "Received data from network", data);
                     //document.getElementById('info').innerHTML = show_info(data);
                     console.time('qr_generation_time');
                     generateQRCode(data);
                     console.timeEnd('qr_generation_time');
-                });
-                socket.on('clear', function(data) {
-                    clear_canvas();
                 });
 
                 // Initialize the QR-Code scanner from the instascan library
@@ -74,7 +61,9 @@
                     if (json.signer_key) {
                         socket.emit('pair', content);
                     } else {
-                        show_info("received answer from signer", content);
+                        var preinfo = document.getElementById('info').innerHTML;
+
+                        show_info(preinfo, "received answer from signer", content);
                         socket.emit('answer', content);
                     }
                 });
