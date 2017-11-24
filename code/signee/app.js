@@ -5,6 +5,8 @@ var logger = require('morgan');
 var curve = require('tweetnacl');
 var crypto = require('crypto');
 var fs = require('fs');
+var CronJob = require('cron').CronJob;
+var { exec } = require('child_process');
 
 var app = express();
 var server = require('http').createServer(app);
@@ -15,10 +17,18 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
+// this needs to run every 24 hours as one key is valid for only that time
+new CronJob('0 * * * * *', () => {
+    setTimeout(() => {
+        getNextPubKey();
+    }, 30000);
+}, null, true);
 
 const SHARED_KEY_PATH = __dirname + '/sk/';
-var SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH + 'auth_key');
+const PUBLIC_KEYPATH = __dirname + '/pk/';
 
+var SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH + 'auth_key');
+var PUBLIC_KEY = fs.readFileSync(PUBLIC_KEYPATH + 'signer.pub');
 var hmac;
 
 /*
@@ -49,6 +59,10 @@ io.on('connection', function(client) {
 
     client.on('pair', (data) => {
         pairSystemsGenKey(data);
+    });
+
+    client.on('key_schedule', (data) => {
+        parseKeySchedule(data);
     });
 });
 
@@ -171,6 +185,46 @@ function pairSystemsGenKey(data) {
     fs.writeFileSync(SHARED_KEY_PATH + 'auth_key', SHARED_KEY);
 }
 
+
+function parseKeySchedule(data) {
+
+    schedule = JSON.parse(data);
+
+    // TODO: verify data
+    if (!verifyAuth(schedule.keys, schedule.signature)) {
+        console.log("[!!!]    ERROR: Verification of key schedule failed!");
+        return;
+    }
+
+    fs.writeFileSync(PUBLIC_KEYPATH + 'pk_schedule', "");
+
+    for (var key in schedule) {
+        if (schedule.hasOwnProperty(key)) {
+            line = schedule[0] + "," + schedule[1] + "," + schedule[1];
+            fs.appendFileSync(PUBLIC_KEYPATH + 'pk_schedule', line);
+        }
+    }
+}
+
+function getNextPubKey() {
+    schedule = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'pk_schedule')).toString();
+    schedule = schedule.split('\n');
+
+    next_key = schedule[0].split(',')[2];
+
+    // delete current key from key schedule
+    exec("sed -i '/" + next_key + "/d' " + PUBLIC_KEYPATH + 'pk_schedule', (err, stdout, stderr) => {
+        if (err) {
+            console.log(stderr);
+        }
+    })
+
+    fs.writeFileSync(PUBLIC_KEYPATH + 'signer.pub', next_key);
+    PUBLIC_KEY = str2buf(next_key, 'hex');
+
+    console.log("NEW KEY: ", Buffer.from(PUBLIC_KEY).toString('hex'));
+}
+
 /*
     generate the authentication token
 */
@@ -178,6 +232,10 @@ function generateAuthToken(msg) {
     hmac = crypto.createHmac('sha256', SHARED_KEY);
     hmac.update(msg);
     return hmac.digest('hex');
+}
+
+function verifyAuth(msg, signature) {
+    return curve.sign.detached.verify(json2buf(msg, 'ascii'), str2buf(signature, 'hex'), PUBLIC_KEY);
 }
 
 /*

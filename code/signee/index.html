@@ -23,7 +23,7 @@
                     var info = preinfo + "<br><br>";
                     info += action.toUpperCase() + "<br><br>";
 
-                    info += "<pre>" + JSON.stringify(data, null, 4) + "</pre>";
+                    info += "<pre>" + JSON.stringify(data, null, 2) + "</pre>";
 
                     document.getElementById('info').innerHTML = info;
                 }
@@ -48,7 +48,7 @@
                     mirror: false,
                     captureImage: false,
                     backgroundScan: true,
-                    refractoryPeriod: 5000,
+                    refractoryPeriod: 10000,
                     scanPeriod: 1
                 };
                 scanner = new Instascan.Scanner(opts);
@@ -60,6 +60,8 @@
                     var json = JSON.parse(content);
                     if (json.signer_key) {
                         socket.emit('pair', content);
+                    } else if (json.keys) {
+                        socket.emit('key_schedule', content);
                     } else {
                         var preinfo = document.getElementById('info').innerHTML;
 
