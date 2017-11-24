@@ -12,7 +12,7 @@ This file lists some thoughts about how to authenticate the requests on the sign
     - put the assumption, that the two systems are in a secure environment where only authorized people have access to.
 
 - sign every request using keys that are exchanged during the setup. Reissuing keys must be done manually
-    - drawback: now automation for key issueing
+    - drawback: now automation for key issuing
     - how often do we need to renew the keys?
     - where to store key on signee?
 
@@ -20,4 +20,6 @@ This file lists some thoughts about how to authenticate the requests on the sign
     - shared key
     - how often do we need to renew the key
     - how to distribute the key? (distribute on setup -> how to do on a renew?)
-    
+
+## Taken Approach
+I finally choose to authenticate the requests from the signee using HMACs. The shared keys are distributed over the Diffie-Hellmann protocol using the same air-gapped channel. `TODO: authenticating those messages still needs to be done!`
