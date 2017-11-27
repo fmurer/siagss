@@ -18,7 +18,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
 // this needs to run every 24 hours as one key is valid for only that time
-new CronJob('0 * * * * *', () => {
+new CronJob('0 * * * *', () => {
     setTimeout(() => {
         getNextPubKey();
     }, 30000);
@@ -28,7 +28,9 @@ const SHARED_KEY_PATH = __dirname + '/sk/';
 const PUBLIC_KEYPATH = __dirname + '/pk/';
 
 var SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH + 'auth_key');
-var PUBLIC_KEY = fs.readFileSync(PUBLIC_KEYPATH + 'signer.pub');
+var PUBLIC_KEY = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'signer.pub')).toString();
+PUBLIC_KEY = str2buf(PUBLIC_KEY, 'hex');
+
 var hmac;
 
 /*
@@ -196,11 +198,14 @@ function parseKeySchedule(data) {
         return;
     }
 
+    keys = schedule.keys;
+
     fs.writeFileSync(PUBLIC_KEYPATH + 'pk_schedule', "");
 
-    for (var key in schedule) {
+    for (var key in keys) {
         if (schedule.hasOwnProperty(key)) {
-            line = schedule[0] + "," + schedule[1] + "," + schedule[1];
+            line = key.valid_from + "," + key.valid_to + "," + key.public_key + "\n";
+	    console.log(line);
             fs.appendFileSync(PUBLIC_KEYPATH + 'pk_schedule', line);
         }
     }
