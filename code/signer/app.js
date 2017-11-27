@@ -22,13 +22,13 @@ io.on('connection', function(client) {
 });
 
 // this needs to run every 10 days as we have a list of 10 precomputed keypairs
-new CronJob('0 * * * * *', () => {
+new CronJob('*/2 * * * *', () => {
     console.log("Generate new Key Schedule");
-    generateNewKeySchedule();
+    generateNewKeySchedule(5);
 }, null, true);
 
 // this needs to run every 24 hours as one key is valid for only that time
-new CronJob('0 * * * * *', () => {
+new CronJob('0 * * * *', () => {
     setTimeout(() => {
         getNextSignKey();
     }, 30000);
@@ -42,7 +42,7 @@ var SIGNING_KEY = Buffer.from(fs.readFileSync(SECRET_KEYPATH + 'sign_key')).toSt
 SIGNING_KEY = str2buf(SIGNING_KEY, 'hex');
 
 // TODO: Signee needs to know this public key in order to authenticate the key schedule.
-generateNewKeySchedule();
+generateNewKeySchedule(5);
 
 
 /*
