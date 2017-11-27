@@ -1,4 +1,3 @@
-// app.js
 var express = require('express');
 var bodyParser = require('body-parser');
 var logger = require('morgan');
@@ -28,7 +27,9 @@ const SHARED_KEY_PATH = __dirname + '/sk/';
 const PUBLIC_KEYPATH = __dirname + '/pk/';
 
 var SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH + 'auth_key');
-var PUBLIC_KEY = fs.readFileSync(PUBLIC_KEYPATH + 'signer.pub');
+var PUBLIC_KEY = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'signer.pub')).toString();
+PUBLIC_KEY = str2buf(PUBLIC_KEY, 'hex');
+
 var hmac;
 
 /*
@@ -49,6 +50,8 @@ io.on('connection', function(client) {
         }
         cb(data);
         callbacks.delete(data.id);
+
+        // start handling the new request (if there is one)
         const new_request = request_queue.shift();
         if (new_request) {
             requestHandler(new_request);
@@ -70,7 +73,7 @@ io.on('connection', function(client) {
 /*
     handle requests
 */
-app.get('/', function(req, res,next) {
+app.get('/', function(req, res, next) {
     res.sendFile(__dirname + '/index.html');
 });
 
@@ -146,14 +149,12 @@ function returnResponse(data, req, res) {
         return;
     }
 
-    // send back actual response
-
     // strip the id
     var answer = {};
     answer['assertion'] = data.assertion;
     answer['signature'] = data.signature;
 
-
+    // send back actual response
     res.json(answer);
 }
 
@@ -190,7 +191,6 @@ function parseKeySchedule(data) {
 
     schedule = JSON.parse(data);
 
-    // TODO: verify data
     if (!verifyAuth(schedule.keys, schedule.signature)) {
         console.log("[!!!]    ERROR: Verification of key schedule failed!");
         return;
@@ -219,6 +219,7 @@ function getNextPubKey() {
         }
     })
 
+    // and move it to the file storing the current public key of the signer
     fs.writeFileSync(PUBLIC_KEYPATH + 'signer.pub', next_key);
     PUBLIC_KEY = str2buf(next_key, 'hex');
 

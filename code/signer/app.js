@@ -1,4 +1,3 @@
-// app.js
 var express = require('express');
 var bodyParser = require('body-parser');
 var logger = require('morgan');
@@ -19,7 +18,7 @@ app.use(logger('dev'));
 
 
 io.on('connection', function(client) {
-        console.log("new client connected");
+    // do nothing
 });
 
 // this needs to run every 10 days as we have a list of 10 precomputed keypairs
@@ -39,7 +38,8 @@ const SECRET_KEYPATH = __dirname + '/sk/';
 const PUBLIC_KEYPATH = __dirname + '/pk/';
 
 var SHARED_KEY = fs.readFileSync(SECRET_KEYPATH + 'auth_key');
-var SIGNING_KEY = fs.readFileSync(SECRET_KEYPATH + 'sign_key');
+var SIGNING_KEY = Buffer.from(fs.readFileSync(SECRET_KEYPATH + 'sign_key')).toString();
+SIGNING_KEY = str2buf(SIGNING_KEY, 'hex');
 
 // TODO: Signee needs to know this public key in order to authenticate the key schedule.
 generateNewKeySchedule();
@@ -48,7 +48,7 @@ generateNewKeySchedule();
 /*
     handle requests
 */
-app.get('/', function(req, res,next) {
+app.get('/', function(req, res, next) {
     res.sendFile(__dirname + '/index.html');
 });
 
@@ -175,11 +175,12 @@ function getValidityRange(startdate, enddate, MAX_DURATION=20) {
     Generate Key Pair for signing
 */
 function generateKeyPair() {
+    
     curve.sign.publicKeyLength = 32;
     curve.sign.secretKeyLength = 64;
     curve.sign.seedLength = 32;
     curve.sign.signatureLength = 64;
-
+    
     return curve.sign.keyPair();
 }
 
@@ -237,7 +238,6 @@ function sendCurrentKeySchedule(req, res, is_request=true) {
 
 }
 
-
 function getNextSignKey() {
     schedule = Buffer.from(fs.readFileSync(SECRET_KEYPATH + 'sk_schedule')).toString();
     schedule = schedule.split('\n');
@@ -256,6 +256,7 @@ function getNextSignKey() {
 
     console.log("NEW KEY: ", Buffer.from(SIGNING_KEY).toString('hex'));
 }
+
 /*
     SOME HELPER FUNCTIONS
 */
