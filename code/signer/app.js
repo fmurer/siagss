@@ -101,7 +101,14 @@ app.post('/', function(req, res) {
 server.listen(3000);
 
 
+/*
+    This function handles the pairing of the two systems, i.e., establishing a new shared secret for authentication
+    * req:      original request
+    * res:      original response (where to send the answer back)
 
+    This function is called when we receive the Diffie-Hellman half key of the signee. Then we also compute our own
+    half key and send it to the singee. With the two half keys we compute the new shared key and write it to the file 'auth_key'
+*/
 function pairSystems(req, res) {
 
     console.log("PAIRING");
@@ -122,9 +129,11 @@ function pairSystems(req, res) {
     res.json(dh_exchange);
 }
 
-
 /*
-    Sign the request and return the signature
+    This function signs the reqeust using the SIGNING_KEY
+    * data:     The data that needs to be signed
+
+    The function returns the signature of the message
 */
 function signRequest(data) {
     console.time('signing_time');
@@ -134,9 +143,12 @@ function signRequest(data) {
     return signature;
 }
 
-
 /*
-    verify authentication
+    This function verifies the authentication token of the signee
+    * msg:        message that is autheticated
+    * auth_token: hmac of the message
+
+    The function returns true if the authentication was successful otherwise false
 */
 function verifyAuth(msg, auth_token) {
     hmac = crypto.createHmac('sha256', SHARED_KEY);
@@ -144,8 +156,13 @@ function verifyAuth(msg, auth_token) {
     return auth_token == hmac.digest('hex');
 }
 
-
-function getValidityRange(startdate, enddate, MAX_DURATION=20) {
+/*
+    This funciton computes a validity range of a signature
+    * startdate:    the start date provided by the request
+    * enddate:      the end date provided by the reqeust
+    * max_duration: How long can a signature be valid at max in days? Default 20 days.
+*/
+function getValidityRange(startdate, enddate, max_duration=20) {
     validity = {};
     var today = new Date();
 
@@ -159,10 +176,10 @@ function getValidityRange(startdate, enddate, MAX_DURATION=20) {
 
     var diff = timeDifference(startdate, enddate);
 
-    if ( diff < MAX_DURATION && diff > 0 ) {
+    if ( diff < max_duration && diff > 0 ) {
         valid_until = enddate;
     } else {
-        valid_until = new Date(valid_until.setDate(valid_from.getDate() + MAX_DURATION));
+        valid_until = new Date(valid_until.setDate(valid_from.getDate() + max_duration));
     }
 
     validity['from'] = Date.parse(valid_from.toUTCString());
@@ -172,7 +189,7 @@ function getValidityRange(startdate, enddate, MAX_DURATION=20) {
 }
 
 /*
-    Generate Key Pair for signing
+    This function generates a new key pair
 */
 function generateKeyPair() {
     

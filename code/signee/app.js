@@ -84,7 +84,7 @@ var request_number = 0;
 app.post('/', function(request, response) {
 
     if (request.body.data == 'pairing') {
-        pairSystemsSetup(request, response);
+        pairSystemsSetup();
         response.end();
         return;
     }
@@ -112,7 +112,11 @@ server.listen(3000);
 
 
 /*
-    handler that handles the requests
+    This function handles the requests from the request_queue. 
+    * data:     the data containing an ID and the data that needs to be signed by the signer.
+
+    the function comptes the authentication token based on the data and then sends a notification to the browser
+    in order to generate the corresponding QR-code
 */
 function requestHandler(data) {
 
@@ -126,27 +130,34 @@ function requestHandler(data) {
     io.sockets.emit('update_img', JSON.stringify(data_to_send));
 }
 
+
+/*
+    This function is called when the we receive a response with the 'answer' flag from the signer
+    * data:     the data from the signer scanned from the browser
+    * req:      the original request object
+    * res:      the original response object in order to know where we need to send the answer back
+
+    The function first checks if it has received an error which would mean that the signer could not
+    verify the data received. If there is no error, we check if the signature is actually from the signer.
+    If either of them does not hold, we resend the original request to the signer.
+    Otherwise, we strip of the id and send the assertion and the signature back to the issuer.
+*/
 function returnResponse(data, req, res) {
 
     var error = data.error;
 
     if (error) {
-
-        // generate request id
-        var hash = crypto.createHash('sha256');
-        var data_orig = req.body;
-        hash.update(JSON.stringify(data_orig));
-        data_orig['id'] = hash.digest('hex');
-
-        // reissue the request on authentication failure
-        callbacks.set(data_orig.id, (data) => {
-            returnResponse(data, req, res);
-        });
-        // prioritize the request and push it to the front of the request_queue
-        //request_queue.push(data_orig)
-        request_queue.unshift(data_orig)
-
+        console.log("[!!!]    ERROR: Signer received a message with wrong authentication token.");
+        console.log("[!!!]    --> resend request");
+        resendRequest(req, res, data);
         return;
+    }
+
+    if (!verifySignature(data.assertion, data.signature)) {
+        console.log("[!!!]    ERROR: Signature is not from Signer!");
+        console.log("[!!!]    --> resend request");
+        resendRequest(req, res, data);
+        return
     }
 
     // strip the id
@@ -158,9 +169,36 @@ function returnResponse(data, req, res) {
     res.json(answer);
 }
 
+/*
+    This function resends the request to the signer and is called in the response handler
+    * data:     the data from the signer scanned from the browser
+    * req:      the original request object
+    * res:      the original response object in order to know where we need to send the answer back
+*/
+function resendRequest(req, res, data) {
+    // generate request id
+    var hash = crypto.createHash('sha256');
+    var data_orig = req.body;
+    hash.update(JSON.stringify(data_orig));
+    data_orig['id'] = hash.digest('hex');
+
+    // reissue the request on authentication failure
+    callbacks.set(data_orig.id, (data) => {
+        returnResponse(data, req, res);
+    });
+    // prioritize the request and push it to the front of the request_queue
+    //request_queue.push(data_orig)
+    request_queue.unshift(data_orig)
+}
+
 var dh;
 
-function pairSystemsSetup(req, res) {
+/*
+    This function is the beginning of the pairing, i.e., establishing a new shared key for authentication.
+    It creates a new Diffie-Hellmann half key using the ECDH algorighm and notifies the browser to generate the
+    corresponding QR-code.
+*/
+function pairSystemsSetup() {
 
     console.log("PAIRING");
 
@@ -176,6 +214,12 @@ function pairSystemsSetup(req, res) {
 
 }
 
+/*
+    This funciton is the second part of the pairing mechanism and is called when the signee receives the
+    Diffie-Hellmann half key from the signer. Together with his own half key he can compute the new shared key and store it
+    in a file 'auth_key'
+    * data:     data from the signer containing its Diffie-Hellman half key
+*/
 function pairSystemsGenKey(data) {
     data = JSON.parse(data);
 
@@ -191,7 +235,7 @@ function parseKeySchedule(data) {
 
     schedule = JSON.parse(data);
 
-    if (!verifyAuth(schedule.keys, schedule.signature)) {
+    if (!verifySignature(schedule.keys, schedule.signature)) {
         console.log("[!!!]    ERROR: Verification of key schedule failed!");
         return;
     }
@@ -203,7 +247,7 @@ function parseKeySchedule(data) {
     for (var key in keys) {
         if (schedule.hasOwnProperty(key)) {
             line = key.valid_from + "," + key.valid_to + "," + key.public_key + "\n";
-	    console.log(line);
+            console.log(line);
             fs.appendFileSync(PUBLIC_KEYPATH + 'pk_schedule', line);
         }
     }
@@ -230,7 +274,8 @@ function getNextPubKey() {
 }
 
 /*
-    generate the authentication token
+    This funciton generates an authentication token by computing a HMAC of the message
+    * msg:     Message which we want to send.
 */
 function generateAuthToken(msg) {
     hmac = crypto.createHmac('sha256', SHARED_KEY);
@@ -238,7 +283,10 @@ function generateAuthToken(msg) {
     return hmac.digest('hex');
 }
 
-function verifyAuth(msg, signature) {
+/*
+    This function verifies the signature of the response. If the verification is successful, it returns true otherwise false.
+*/
+function verifySignature(msg, signature) {
     return curve.sign.detached.verify(json2buf(msg, 'ascii'), str2buf(signature, 'hex'), PUBLIC_KEY);
 }
 
