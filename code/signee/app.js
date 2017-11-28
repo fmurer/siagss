@@ -322,7 +322,7 @@ function generateAuthToken(msg) {
 */
 function verifyAuth(msg, auth_token) {
     hmac = crypto.createHmac('sha256', SHARED_KEY);
-    hmac.update(JSON.stringify(msg));
+    hmac.update(msg);
     return auth_token == hmac.digest('hex');
 }
 

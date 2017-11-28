@@ -70,7 +70,7 @@ app.post('/', function(req, res) {
     var auth = incoming_request.auth;
 
     // check if the data is correct, i.e. not altered and coming from the signee
-    if (!verifyAuth(data, auth)) {
+    if (!verifyAuth(JSON.stringify(data), auth)) {
         var error = {};
         error['error'] = 'There has been an error! The authentication token could not be verified';
         res.json(error);
@@ -174,7 +174,7 @@ function generateAuthToken(msg) {
 */
 function verifyAuth(msg, auth_token) {
     hmac = crypto.createHmac('sha256', SHARED_KEY);
-    hmac.update(JSON.stringify(msg));
+    hmac.update(msg);
     return auth_token == hmac.digest('hex');
 }
 
