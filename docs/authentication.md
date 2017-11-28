@@ -22,4 +22,5 @@ This file lists some thoughts about how to authenticate the requests on the sign
     - how to distribute the key? (distribute on setup -> how to do on a renew?)
 
 ## Taken Approach
-I finally choose to authenticate the requests from the signee using HMACs. The shared keys are distributed over the Diffie-Hellmann protocol using the same air-gapped channel. `TODO: authenticating those messages still needs to be done!`
+I finally choose to authenticate the requests from the signee using HMACs. The shared keys are distributed over the Diffie-Hellmann protocol using the same air-gapped channel. 
+--> This is now done by simply using the old shared key. On the very first setup, which is done by a trusted administrator, the pairing is not signed!

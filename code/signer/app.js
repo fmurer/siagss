@@ -115,6 +115,14 @@ function pairSystems(req, res) {
 
     var data = JSON.parse(req.body.qrcode);
 
+    if (data.auth) {
+        if (!verifyAuth(data.signee_key, data.auth)) {
+            console.log("[!!!] ERROR: Pairing failed due to incorrect authentication!");
+            console.log("[!!!] --> Keep old shared key");
+            return;
+        }
+    }
+
     var dh = crypto.createECDH('secp521r1');
     var signer_key = dh.generateKeys('hex', 'compressed');
 
@@ -122,6 +130,10 @@ function pairSystems(req, res) {
 
     var dh_exchange = {};
     dh_exchange['signer_key'] = signer_key;
+
+    if (SHARED_KEY) {
+        dh_exchange['auth'] = generateAuthToken(signer_key);
+    }
 
     SHARED_KEY = shared_key
     console.log(SHARED_KEY);
@@ -141,6 +153,16 @@ function signRequest(data) {
     signature = Buffer.from(signature).toString('hex');
     console.timeEnd('signing_time');
     return signature;
+}
+
+/*
+    This funciton generates an authentication token by computing a HMAC of the message
+    * msg:     Message which we want to send.
+*/
+function generateAuthToken(msg) {
+    hmac = crypto.createHmac('sha256', SHARED_KEY);
+    hmac.update(msg);
+    return hmac.digest('hex');
 }
 
 /*
@@ -293,6 +315,7 @@ function isValid(from, to) {
 
     return (today >= from && today < to);
 }
+
 /*
     SOME HELPER FUNCTIONS
 */

@@ -209,6 +209,10 @@ function pairSystemsSetup() {
     var dh_exchange = {};
     dh_exchange['signee_key'] = signee_key;
 
+    if (SHARED_KEY) {
+        dh_exchange['auth'] = generateAuthToken(signee_key);
+    }
+
     io.sockets.emit('update_img', JSON.stringify(dh_exchange));
 
 }
@@ -222,6 +226,13 @@ function pairSystemsSetup() {
 function pairSystemsGenKey(data) {
     data = JSON.parse(data);
 
+    if (data.auth) {
+        if(!verifyAuth(data.signer_key, data.auth)) {
+            console.log("[!!!] ERROR: Pairing failed due to incorrect authentication!");
+            console.log("[!!!] --> Keep old shared key");
+            return;
+        }
+    }
     var shared_key = dh.computeSecret(data.signer_key, 'hex', 'hex');
 
     SHARED_KEY = shared_key;
@@ -300,6 +311,19 @@ function generateAuthToken(msg) {
     hmac = crypto.createHmac('sha256', SHARED_KEY);
     hmac.update(msg);
     return hmac.digest('hex');
+}
+
+/*
+    This function verifies the authentication token of the signee
+    * msg:        message that is autheticated
+    * auth_token: hmac of the message
+
+    The function returns true if the authentication was successful otherwise false
+*/
+function verifyAuth(msg, auth_token) {
+    hmac = crypto.createHmac('sha256', SHARED_KEY);
+    hmac.update(JSON.stringify(msg));
+    return auth_token == hmac.digest('hex');
 }
 
 /*
