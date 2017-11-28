@@ -11,7 +11,7 @@ counter=0
 while IFS='' read -r line || [[ -n "$line" ]]; do
 	echo "$line" > key_"$counter"
 	let counter++
-done
+done <<< "${keypair}"
 
 mv ./key_0 ../signer/pk/signer.pub
 mv ./key_1 ../signer/sk/sign_key

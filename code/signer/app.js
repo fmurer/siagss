@@ -261,8 +261,17 @@ function getNextSignKey() {
     // if there are keys left in the keyschedule
     if (schedule != "") {
         schedule = schedule.split('\n');
+        new_line = schedule[0].split(',');
 
-        next_key = schedule[0].split(',')[2];
+        from = new Date(new_line[0]);
+        to = new Date(new_line[1]);
+
+        // check if the key is valid for this time
+        if (!isValid(from, to)) {
+            return;
+        }
+
+        next_key = new_line[2];
 
         // delete current key from key schedule
         exec("sed -i '/" + next_key + "/d' " + SECRET_KEYPATH + 'sk_schedule', (err, stdout, stderr) => {
@@ -279,6 +288,11 @@ function getNextSignKey() {
     
 }
 
+function isValid(from, to) {
+    var today = Date();
+
+    return (today >= from && today < to);
+}
 /*
     SOME HELPER FUNCTIONS
 */

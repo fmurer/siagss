@@ -11,12 +11,14 @@
         <div id="container" style="margin-top: 30px">
             <!-- Placeholder for the QR-Code -->
 
-            <table>
-                <td id="qr_code" style="width: 60%; padding-left: 20pt;"><canvas id="canvas"></td>
+            <table style="width: 100%; table-layout: fixed;">
+                <td id="qr_code" style="padding-left: 20pt;"><canvas id="canvas"></td>
                 <td id="info" style="width: 40%; text-align: left; display: block; padding-left: 20pt;"></td>
             </table>
 
             <script type="text/javascript">
+
+                var key_schedule_on = false;
 
                 function show_info(preinfo, action, data) {
 
@@ -36,9 +38,15 @@
                 socket.on('update_img', function(data) {
                     show_info("", "key schedule", data);
                     
+                    key_schedule_on = true;
+
                     console.time('qr_generation_time');
                     generateQRCode(JSON.stringify(data));
                     console.timeEnd('qr_generation_time');
+                    
+                    setTimeout(() => {
+                        key_schedule_on = false;
+                    }, 750);
                 });
 
                 // Initialize the QR-Code scanner from the instascan library
@@ -57,21 +65,23 @@
                 // function is executed. This sends an Ajax POST request with the read data to the
                 // index page. This request gets handled from the Node.js backend.
                 scanner.addListener('scan', function(content) {
-                    show_info("", "received data from signee", JSON.parse(content));
-                    $.ajax({
-                        type: 'POST',
-                        data: JSON.stringify({qrcode: content}),
-                        contentType: 'application/json',
-                        url: '/',
-                        success: function(data) {
-                            var preinfo = document.getElementById('info').innerHTML;
-                            show_info(preinfo, "signed data", data);
+                    if (!key_schedule_on) {
+                        show_info("", "received data from signee", JSON.parse(content));
+                        $.ajax({
+                            type: 'POST',
+                            data: JSON.stringify({qrcode: content}),
+                            contentType: 'application/json',
+                            url: '/',
+                            success: function(data) {
+                                var preinfo = document.getElementById('info').innerHTML;
+                                show_info(preinfo, "signed data", data);
 
-                            console.time('qr_generation_time');
-                            generateQRCode(JSON.stringify(data));
-                            console.timeEnd('qr_generation_time');
-                        }
-                    });
+                                console.time('qr_generation_time');
+                                generateQRCode(JSON.stringify(data));
+                                console.timeEnd('qr_generation_time');
+                            }
+                        });
+                    }
                 });
 
                 // choose the camera

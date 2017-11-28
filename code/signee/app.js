@@ -147,15 +147,15 @@ function returnResponse(data, req, res) {
     var error = data.error;
 
     if (error) {
-        console.log("[!!!]    ERROR: Signer received a message with wrong authentication token.");
-        console.log("[!!!]    --> resend request");
+        console.log("[!!!] ERROR: Signer received a message with wrong authentication token.");
+        console.log("[!!!] --> resend request");
         resendRequest(req, res, data);
         return;
     }
 
     if (!verifySignature(data.assertion, data.signature)) {
-        console.log("[!!!]    ERROR: Signature is not from Signer!");
-        console.log("[!!!]    --> resend request");
+        console.log("[!!!] ERROR: Signature is not from Signer!");
+        console.log("[!!!] --> resend request");
         resendRequest(req, res, data);
         return
     }
@@ -235,9 +235,11 @@ function parseKeySchedule(data) {
     schedule = JSON.parse(data);
 
     if (!verifySignature(schedule.keys, schedule.signature)) {
-        console.log("[!!!]    ERROR: Verification of key schedule failed!");
+        console.log("[!!!] ERROR: Verification of key schedule failed!");
         return;
     }
+
+    console.log("[***] Received new Key Schedule");
 
     keys = schedule.keys;
 
@@ -256,8 +258,17 @@ function getNextPubKey() {
     
     if (schedule != "") {
         schedule = schedule.split('\n');
+        new_line = schedule[0].split(',');
 
-        next_key = schedule[0].split(',')[2];
+        from = new Date(new_line[0]);
+        to = new Date(new_line[1]);
+
+        // check if the key is valid for this time
+        if (!isValid(from, to)) {
+            return;
+        }
+
+        next_key = new_line[2];
 
         // delete current key from key schedule
         exec("sed -i '/" + next_key + "/d' " + PUBLIC_KEYPATH + 'pk_schedule', (err, stdout, stderr) => {
@@ -270,9 +281,15 @@ function getNextPubKey() {
         fs.writeFileSync(PUBLIC_KEYPATH + 'signer.pub', next_key);
         PUBLIC_KEY = str2buf(next_key, 'hex');
 
-        console.log("NEW PUBLIC KEY: ", Buffer.from(PUBLIC_KEY).toString('hex'));
+        console.log("[***] NEW PUBLIC KEY: ", Buffer.from(PUBLIC_KEY).toString('hex'));
     }
     
+}
+
+function isValid(from, to) {
+    var today = Date();
+
+    return (today >= from && today < to);
 }
 
 /*
