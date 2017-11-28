@@ -10,9 +10,9 @@
     <body style="text-align: center;">
         <div id="container" style="margin-top: 30px">
 
-            <table style="width: 100%;">
-                <td id="qr_code" style="padding-left: 40pt;"><canvas id="canvas" width="auto" height="100%"></td>
-                <td id="info" style="width: auto; text-align: left; display: block; padding-left: 20pt;"></td>
+            <table style="width: 100%; table-layout: fixed;">
+                <td id="qr_code" style="padding-left: 20pt;"><canvas id="canvas"></td>
+                <td id="info" style="width: 40%; text-align: left; display: block; padding-left: 20pt;"></td>
             </table>
 
             <!-- Handling update from Server -->
@@ -23,7 +23,7 @@
                     var info = preinfo + "<br><br>";
                     info += action.toUpperCase() + "<br><br>";
 
-                    info += "<pre>" + JSON.stringify(data, null, 4) + "</pre>";
+                    info += "<pre>" + JSON.stringify(data, null, 2) + "</pre>";
 
                     document.getElementById('info').innerHTML = info;
                 }
@@ -35,7 +35,6 @@
                 });
                 socket.on('update_img', function(data) {
                     show_info("", "Received data from network", data);
-                    //document.getElementById('info').innerHTML = show_info(data);
                     console.time('qr_generation_time');
                     generateQRCode(data);
                     console.timeEnd('qr_generation_time');
@@ -48,7 +47,7 @@
                     mirror: false,
                     captureImage: false,
                     backgroundScan: true,
-                    refractoryPeriod: 5000,
+                    refractoryPeriod: 10000,
                     scanPeriod: 1
                 };
                 scanner = new Instascan.Scanner(opts);
@@ -60,6 +59,8 @@
                     var json = JSON.parse(content);
                     if (json.signer_key) {
                         socket.emit('pair', content);
+                    } else if (json.keys) {
+                        socket.emit('key_schedule', content);
                     } else {
                         var preinfo = document.getElementById('info').innerHTML;
 

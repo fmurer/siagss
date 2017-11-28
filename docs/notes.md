@@ -7,3 +7,8 @@ Libraries:
 * [QR-generator](https://github.com/kazuhikoarase/qrcode-generator/tree/master/js)
 * [jquery QR-Code](https://github.com/lrsjng/jquery-qrcode)
 * [QR-Code scanner](https://github.com/schmich/instascan)
+
+
+# Pay attention
+
+* fs.read*() returns a buffer and not a string!

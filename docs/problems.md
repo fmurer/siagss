@@ -1,10 +1,15 @@
 # Encountered Problems
 
 ## Screen alignment
-It seems to be very crucial to perfectly align the screens in order for the cameras to capture the QR-code. Already a slight misalignment leads to the camera failing reading the QR-code or at least takes much longer to read it. Also, make sure that you do not use screens that reflect the light, better use mat screens. Also make sure that there is not too much ambient light that disturbs the cameras.
+It seems to be very crucial to perfectly align the screens in order for the cameras to capture the QR-code. Already a small misalignment results in either the camera taking longer to read the QR-code or not being able to read it at all. Also, the distance from camera to the screen seems to play a bigger role. As soon as the QR-codes get larger, the camera cannot read the QR-code when it is too far away.
 
 ## Single Core Usage
-Unfortunately, Node JS is only a single threaded process, thus uses only one CPU core. This reduces performance. However, using a module that enables multicore usage is also not a preferable idea, since those modules do not allow shared values and parallel programming introduces new weaknesses such as race conditions. Also, since the screen displays only one QR-code, this would serialize the whole thing again so multicore computation would only give some performance when de- and encoding the QR-codes and signing.
+Unfortunately, Node JS is only a single threaded process, thus uses only one CPU core. This reduces performance. Although there are some methods in node with which one can use all cores, it is not recommended in this case, because those modules do not support shared variables which would be needed in our case. Furthermore, it also does not really make sense, because we can only handle one request after the other which means that we again process the requests in sequence and not in parallel. The only benefit we would have by using every core would be faster QR-decoding (when done on the server instead of the browser), faster QR-generation and siging.
+
+## Key Schedule
+How to make sure the signee has received the new key schedule? Currently, on every new key schedule generation, the signer shows its qr-code. However, if this happens during processing new reqeusts, the signer might refresh the QR-code even before the signee could read the new key schedule.
+
+Also, currently the signee can only read a QR-code that consists of a key schedule of length 3, i.e., three public keys with start and end date.
 
 ## authentication
 How to authenticate key distributions? Is a pre-shared key necessary (private/public)?

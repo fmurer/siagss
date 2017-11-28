@@ -5,27 +5,49 @@
         <script type="text/javascript" src="/instascan/instascan.min.js"></script>
         <script type="text/javascript" src="/jquery/dist/jquery.min.js"></script>
         <script type="text/javascript" src="/jquery_qrcode/jquery-qrcode.min.js"></script>
+        <script type="text/javascript" src="/socket.io/socket.io.js"></script>
     </head>
     <body style="text-align: center;">
         <div id="container" style="margin-top: 30px">
             <!-- Placeholder for the QR-Code -->
 
-            <table style="width: 100%;">
-                <td id="qr_code" style="padding-left: 40pt;"><canvas id="canvas" width="auto" height="100%"></td>
-                <td id="info" style="width: auto; text-align: left; display: block; padding-left: 20pt;"></td>
+            <table style="width: 100%; table-layout: fixed;">
+                <td id="qr_code" style="padding-left: 20pt;"><canvas id="canvas"></td>
+                <td id="info" style="width: 40%; text-align: left; display: block; padding-left: 20pt;"></td>
             </table>
 
             <script type="text/javascript">
+
+                var key_schedule_on = false;
 
                 function show_info(preinfo, action, data) {
 
                     var info = preinfo + "<br><br>";
                     info += action.toUpperCase() + "<br><br>";
 
-                    info += "<pre>" + JSON.stringify(data, null, 4) + "</pre>";
+                    info += "<pre>" + JSON.stringify(data, null, 2) + "</pre>";
 
                     document.getElementById('info').innerHTML = info;
                 }
+
+                // Handling the notifications of the server when there is a new message arriving
+                var socket = io.connect('http://localhost:3000');
+                socket.on('connect', function(data) {
+                    console.log("Hi from client");
+                });
+                socket.on('update_img', function(data) {
+                    show_info("", "key schedule", data);
+                    
+                    key_schedule_on = true;
+
+                    console.time('qr_generation_time');
+                    generateQRCode(JSON.stringify(data));
+                    console.timeEnd('qr_generation_time');
+                    
+                    setTimeout(() => {
+                        key_schedule_on = false;
+                    }, 750);
+                });
 
                 // Initialize the QR-Code scanner from the instascan library
                 opts = {
@@ -34,7 +56,7 @@
                     mirror: false,
                     captureImage: false,
                     backgroundScan: true,
-                    refractoryPeriod: 5000,
+                    refractoryPeriod: 10000,
                     scanPeriod: 1
                 };
                 scanner = new Instascan.Scanner(opts);
@@ -43,21 +65,23 @@
                 // function is executed. This sends an Ajax POST request with the read data to the
                 // index page. This request gets handled from the Node.js backend.
                 scanner.addListener('scan', function(content) {
-                    show_info("", "received data from signee", JSON.parse(content));
-                    $.ajax({
-                        type: 'POST',
-                        data: JSON.stringify({qrcode: content}),
-                        contentType: 'application/json',
-                        url: '/',
-                        success: function(data) {
-                            var preinfo = document.getElementById('info').innerHTML;
-                            show_info(preinfo, "signed data", data);
-                            
-                            console.time('qr_generation_time');
-                            generateQRCode(JSON.stringify(data));
-                            console.timeEnd('qr_generation_time');
-                        }
-                    });
+                    if (!key_schedule_on) {
+                        show_info("", "received data from signee", JSON.parse(content));
+                        $.ajax({
+                            type: 'POST',
+                            data: JSON.stringify({qrcode: content}),
+                            contentType: 'application/json',
+                            url: '/',
+                            success: function(data) {
+                                var preinfo = document.getElementById('info').innerHTML;
+                                show_info(preinfo, "signed data", data);
+
+                                console.time('qr_generation_time');
+                                generateQRCode(JSON.stringify(data));
+                                console.timeEnd('qr_generation_time');
+                            }
+                        });
+                    }
                 });
 
                 // choose the camera
@@ -115,6 +139,24 @@
                     options['text'] = data;
                     $('#qr_code').empty().qrcode(options);
                 }
+
+                $(this).on('keypress', function(event) {
+                    // if key 'k' is pressed
+                    if (event.which == 107) {
+                        qrcode = {};
+                        qrcode['qrcode'] = 'key_schedule';
+                        $.ajax({
+                            type: 'POST',
+                            data: JSON.stringify(qrcode),
+                            contentType: 'application/json',
+                            url: '/',
+                            success: function(data) {
+                                show_info("", "key schedule", data);
+                                generateQRCode(JSON.stringify(data));
+                            }
+                        });
+                    }
+                });
             </script>
         </div>
     </body>
