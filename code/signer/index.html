@@ -11,9 +11,9 @@
         <div id="container" style="margin-top: 30px">
             <!-- Placeholder for the QR-Code -->
 
-            <table style="width: 100%;">
-                <td id="qr_code" style="padding-left: 40pt;"><canvas id="canvas" width="auto" height="100%"></td>
-                <td id="info" style="width: auto; text-align: left; display: block; padding-left: 20pt;"></td>
+            <table>
+                <td id="qr_code" style="width: 60%; padding-left: 20pt;"><canvas id="canvas"></td>
+                <td id="info" style="width: 40%; text-align: left; display: block; padding-left: 20pt;"></td>
             </table>
 
             <script type="text/javascript">
@@ -35,7 +35,7 @@
                 });
                 socket.on('update_img', function(data) {
                     show_info("", "key schedule", data);
-                    //document.getElementById('info').innerHTML = show_info(data);
+                    
                     console.time('qr_generation_time');
                     generateQRCode(JSON.stringify(data));
                     console.timeEnd('qr_generation_time');

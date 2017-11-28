@@ -8,7 +8,7 @@ if [ "$#" -ne 1 ]; then
 	exit 1
 fi
 
-for i in {1..50}
+for i in {1..100}
 do
     data="{ 'IP': '192.168.0.$i', 'HOST': 'localhost$i'}";
     from="07/11/2017";

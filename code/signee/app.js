@@ -17,7 +17,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
 // this needs to run every 24 hours as one key is valid for only that time
-new CronJob('0 * * * *', () => {
+new CronJob('* * * * *', () => {
     setTimeout(() => {
         getNextPubKey();
     }, 30000);
@@ -187,7 +187,6 @@ function resendRequest(req, res, data) {
         returnResponse(data, req, res);
     });
     // prioritize the request and push it to the front of the request_queue
-    //request_queue.push(data_orig)
     request_queue.unshift(data_orig)
 }
 
@@ -245,9 +244,8 @@ function parseKeySchedule(data) {
     fs.writeFileSync(PUBLIC_KEYPATH + 'pk_schedule', "");
 
     for (var key in keys) {
-        if (schedule.hasOwnProperty(key)) {
-            line = key.valid_from + "," + key.valid_to + "," + key.public_key + "\n";
-            console.log(line);
+        if (keys.hasOwnProperty(key)) {
+            line = keys[key].valid_from + "," + keys[key].valid_to + "," + keys[key].public_key + "\n";
             fs.appendFileSync(PUBLIC_KEYPATH + 'pk_schedule', line);
         }
     }
@@ -255,22 +253,26 @@ function parseKeySchedule(data) {
 
 function getNextPubKey() {
     schedule = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'pk_schedule')).toString();
-    schedule = schedule.split('\n');
+    
+    if (schedule != "") {
+        schedule = schedule.split('\n');
 
-    next_key = schedule[0].split(',')[2];
+        next_key = schedule[0].split(',')[2];
 
-    // delete current key from key schedule
-    exec("sed -i '/" + next_key + "/d' " + PUBLIC_KEYPATH + 'pk_schedule', (err, stdout, stderr) => {
-        if (err) {
-            console.log(stderr);
-        }
-    })
+        // delete current key from key schedule
+        exec("sed -i '/" + next_key + "/d' " + PUBLIC_KEYPATH + 'pk_schedule', (err, stdout, stderr) => {
+            if (err) {
+                console.log(stderr);
+            }
+        })
 
-    // and move it to the file storing the current public key of the signer
-    fs.writeFileSync(PUBLIC_KEYPATH + 'signer.pub', next_key);
-    PUBLIC_KEY = str2buf(next_key, 'hex');
+        // and move it to the file storing the current public key of the signer
+        fs.writeFileSync(PUBLIC_KEYPATH + 'signer.pub', next_key);
+        PUBLIC_KEY = str2buf(next_key, 'hex');
 
-    console.log("NEW KEY: ", Buffer.from(PUBLIC_KEY).toString('hex'));
+        console.log("NEW PUBLIC KEY: ", Buffer.from(PUBLIC_KEY).toString('hex'));
+    }
+    
 }
 
 /*
