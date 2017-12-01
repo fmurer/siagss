@@ -18,7 +18,7 @@
             <!-- Handling update from Server -->
             <script>
                 function show_info(preinfo, action, data) {
-                    data = JSON.parse(data);
+                    //data = JSON.parse(data);
 
                     var info = preinfo + "<br><br>";
                     info += action.toUpperCase() + "<br><br>";
@@ -58,14 +58,14 @@
                 scanner.addListener('scan', function(content) {
                     var json = JSON.parse(content);
                     if (json.signer_key) {
-                        socket.emit('pair', content);
+                        socket.emit('pair', json);
                     } else if (json.keys) {
-                        socket.emit('key_schedule', content);
+                        socket.emit('key_schedule', json);
                     } else {
                         var preinfo = document.getElementById('info').innerHTML;
 
-                        show_info(preinfo, "received answer from signer", content);
-                        socket.emit('answer', content);
+                        show_info(preinfo, "received answer from signer", json);
+                        socket.emit('answer', json);
                     }
                 });
 
@@ -121,7 +121,7 @@
                 };
 
                 function generateQRCode(data) {
-                    options['text'] = data;
+                    options['text'] = JSON.stringify(data);
                     $('#qr_code').empty().qrcode(options);
                 }
 

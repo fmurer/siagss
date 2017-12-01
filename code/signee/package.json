@@ -15,7 +15,7 @@
     "instascan": "^1.0.0",
     "jquery": "^3.2.1",
     "morgan": "^1.9.0",
-    "socket.io": "^2.0.3",
+    "socket.io": "^2.0.4",
     "tweetnacl": "^1.0.0"
   }
 }

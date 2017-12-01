@@ -42,7 +42,7 @@ io.on('connection', function(client) {
     client.setMaxListeners(0);
 
     client.on('answer', (data) => {
-        data = JSON.parse(data);
+        //data = JSON.parse(data);
 
         const cb = callbacks.get(data.id);
         if (!cb) {
@@ -92,6 +92,7 @@ app.post('/', function(request, response) {
     // generate request id
     var hash = crypto.createHash('sha256');
     var data = request.body;
+    
     hash.update(JSON.stringify(data));
     data['id'] = hash.digest('hex');
 
@@ -123,11 +124,12 @@ function requestHandler(data) {
     var data_to_send = {};
     data_to_send['data'] = data;
     console.time('auth_token_generation_time');
-    data_to_send['auth'] = generateAuthToken(JSON.stringify(data));;
+    data_to_send['auth'] = generateAuthToken(JSON.stringify(data));
     console.timeEnd('auth_token_generation_time');
 
+
     // notify the browser which then sets the qr-code
-    io.sockets.emit('update_img', JSON.stringify(data_to_send));
+    io.sockets.emit('update_img', data_to_send);
 }
 
 
@@ -209,11 +211,11 @@ function pairSystemsSetup() {
     var dh_exchange = {};
     dh_exchange['signee_key'] = signee_key;
 
-    if (SHARED_KEY) {
+    if (SHARED_KEY != "") {
         dh_exchange['auth'] = generateAuthToken(signee_key);
     }
 
-    io.sockets.emit('update_img', JSON.stringify(dh_exchange));
+    io.sockets.emit('update_img', dh_exchange);
 
 }
 
@@ -224,7 +226,7 @@ function pairSystemsSetup() {
     * data:     data from the signer containing its Diffie-Hellman half key
 */
 function pairSystemsGenKey(data) {
-    data = JSON.parse(data);
+    //data = JSON.parse(data);
 
     if (data.auth) {
         if(!verifyAuth(data.signer_key, data.auth)) {
@@ -243,7 +245,7 @@ function pairSystemsGenKey(data) {
 
 function parseKeySchedule(data) {
 
-    schedule = JSON.parse(data);
+    schedule = data;//JSON.parse(data);
 
     if (!verifySignature(schedule.keys, schedule.signature)) {
         console.log("[!!!] ERROR: Verification of key schedule failed!");

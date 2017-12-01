@@ -131,7 +131,7 @@ function pairSystems(req, res) {
     var dh_exchange = {};
     dh_exchange['signer_key'] = signer_key;
 
-    if (SHARED_KEY) {
+    if (SHARED_KEY != "") {
         dh_exchange['auth'] = generateAuthToken(signer_key);
     }
 

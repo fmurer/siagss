@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+    <!DOCTYPE html>
 <html>
     <head>
         <title>Signer</title>
@@ -41,7 +41,7 @@
                     key_schedule_on = true;
 
                     console.time('qr_generation_time');
-                    generateQRCode(JSON.stringify(data));
+                    generateQRCode(data);
                     console.timeEnd('qr_generation_time');
                     
                     setTimeout(() => {
@@ -136,7 +136,7 @@
                 };
 
                 function generateQRCode(data) {
-                    options['text'] = data;
+                    options['text'] = JSON.stringify(data);
                     $('#qr_code').empty().qrcode(options);
                 }
 
