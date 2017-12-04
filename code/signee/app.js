@@ -108,6 +108,7 @@ app.post('/', function(request, response) {
 
 });
 
+server.setTimeout(0);
 server.listen(3000);
 
 
@@ -225,7 +226,6 @@ function pairSystemsSetup() {
     * data:     data from the signer containing its Diffie-Hellman half key
 */
 function pairSystemsGenKey(data) {
-    //data = JSON.parse(data);
 
     if (data.auth) {
         if(!verifyAuth(data.signer_key, data.auth)) {
@@ -244,7 +244,7 @@ function pairSystemsGenKey(data) {
 
 function parseKeySchedule(data) {
 
-    schedule = data;//JSON.parse(data);
+    schedule = data;
 
     if (!verifySignature(schedule.keys, schedule.signature)) {
         console.log("[!!!] ERROR: Verification of key schedule failed!");

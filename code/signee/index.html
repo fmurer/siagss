@@ -11,8 +11,13 @@
         <div id="container" style="margin-top: 30px">
 
             <table style="width: 100%; table-layout: fixed;">
-                <td id="qr_code" style="padding-left: 20pt;"><canvas id="canvas"></td>
-                <td id="info" style="width: 40%; text-align: left; display: block; padding-left: 20pt;"></td>
+                <tr>
+                    <td id="qr_code" style="padding-left: 20pt;" rowspan="2"><canvas id="canvas"></td>
+                    <td id="info" style="width: 40%; text-align: left; display: block; padding-left: 20pt;"></td>
+                </tr>
+                <tr>
+                    <td><video id="preview" style="display: hidden;"></video></td>
+                </tr>
             </table>
 
             <!-- Handling update from Server -->
@@ -53,7 +58,7 @@
                 // Initialize the QR-Code scanner from the instascan library
                 opts = {
                     continuous: true,
-                    //video: document.getElementById('preview'),
+                    video: document.getElementById('preview'),
                     mirror: false,
                     captureImage: false,
                     backgroundScan: true,
