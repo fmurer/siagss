@@ -23,7 +23,7 @@ io.on('connection', function(client) {
 
 // this needs to run every 10 days as we have a list of 10 precomputed keypairs
 new CronJob('*/2 * * * *', () => {
-    console.log("Generate new Key Schedule");
+    console.log("[***] Generate new Key Schedule");
     generateNewKeySchedule(3);
 }, null, true);
 
@@ -290,7 +290,8 @@ function getNextSignKey() {
 
         // check if the key is valid for this time
         if (!isValid(from, to)) {
-            return;
+            //TODO: remove this comment in production
+            //return;
         }
 
         next_key = new_line[2];

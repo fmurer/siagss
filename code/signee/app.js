@@ -42,20 +42,19 @@ io.on('connection', function(client) {
     client.setMaxListeners(0);
 
     client.on('answer', (data) => {
-        //data = JSON.parse(data);
 
         const cb = callbacks.get(data.id);
-        if (!cb) {
-            return;
+        if (cb) {
+            cb(data);
+            callbacks.delete(data.id);
         }
-        cb(data);
-        callbacks.delete(data.id);
 
         // start handling the new request (if there is one)
         const new_request = request_queue.shift();
         if (new_request) {
             requestHandler(new_request);
         } else {
+            io.sockets.emit('clear_screen', null);
             request_number = 0;
         }
     });
@@ -278,7 +277,8 @@ function getNextPubKey() {
 
         // check if the key is valid for this time
         if (!isValid(from, to)) {
-            return;
+            //TODO: remove this comment in production
+            //return;
         }
 
         next_key = new_line[2];

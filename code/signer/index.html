@@ -44,8 +44,10 @@
                     generateQRCode(data);
                     console.timeEnd('qr_generation_time');
                     
+                    scanner.stop();
                     setTimeout(() => {
                         key_schedule_on = false;
+                        scanner.start();
                     }, 750);
                 });
 
@@ -65,23 +67,21 @@
                 // function is executed. This sends an Ajax POST request with the read data to the
                 // index page. This request gets handled from the Node.js backend.
                 scanner.addListener('scan', function(content) {
-                    if (!key_schedule_on) {
-                        show_info("", "received data from signee", JSON.parse(content));
-                        $.ajax({
-                            type: 'POST',
-                            data: JSON.stringify({qrcode: content}),
-                            contentType: 'application/json',
-                            url: '/',
-                            success: function(data) {
-                                var preinfo = document.getElementById('info').innerHTML;
-                                show_info(preinfo, "signed data", data);
+                    show_info("", "received data from signee", JSON.parse(content));
+                    $.ajax({
+                        type: 'POST',
+                        data: JSON.stringify({qrcode: content}),
+                        contentType: 'application/json',
+                        url: '/',
+                        success: function(data) {
+                            var preinfo = document.getElementById('info').innerHTML;
+                            show_info(preinfo, "signed data", data);
 
-                                console.time('qr_generation_time');
-                                generateQRCode(JSON.stringify(data));
-                                console.timeEnd('qr_generation_time');
-                            }
-                        });
-                    }
+                            console.time('qr_generation_time');
+                            generateQRCode(data);
+                            console.timeEnd('qr_generation_time');
+                        }
+                    });
                 });
 
                 // choose the camera
@@ -152,7 +152,7 @@
                             url: '/',
                             success: function(data) {
                                 show_info("", "key schedule", data);
-                                generateQRCode(JSON.stringify(data));
+                                generateQRCode(data);
                             }
                         });
                     }
