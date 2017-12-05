@@ -64,6 +64,10 @@ io.on('connection', function(client) {
     });
 
     client.on('key_schedule', (data) => {
+        ack = {};
+        ack['ack'] = "I have received the key schedule";
+        ack['auth'] = generateAuthToken(ack['ack']);
+        io.sockets.emit('ack', ack);
         parseKeySchedule(data);
     });
 });

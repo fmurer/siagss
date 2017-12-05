@@ -66,6 +66,16 @@ app.post('/', function(req, res) {
         return;
     }
 
+    if (incoming_request.ack) {
+        if (verifyAuth(JSON.stringify(incoming_request.ack)), incoming_request.auth) {
+            res.end('acknowledged');
+            return;
+        } else {
+            res.end();
+            return;
+        }
+    }
+
     var data = incoming_request.data;
     var auth = incoming_request.auth;
 

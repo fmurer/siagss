@@ -16,7 +16,7 @@
                     <td id="info" style="width: 40%; text-align: left; display: block; padding-left: 20pt;"></td>
                 </tr>
                 <tr>
-                    <td><video id="preview" style="display: hidden;"></video></td>
+                    <td><video id="preview" style="display: none;"></video></td>
                 </tr>
             </table>
 
@@ -46,6 +46,12 @@
                 });
                 socket.on('update_img', function(data) {
                     show_info("", "Received data from network", data);
+                    console.time('qr_generation_time');
+                    generateQRCode(data);
+                    console.timeEnd('qr_generation_time');
+                });
+                socket.on('ack', (data) => {
+                    show_info("", "acknowledgement", data);
                     console.time('qr_generation_time');
                     generateQRCode(data);
                     console.timeEnd('qr_generation_time');

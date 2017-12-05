@@ -17,7 +17,7 @@
                     <td id="info" style="width: 40%; text-align: left; display: block; padding-left: 20pt;"></td>
                 </tr>
                 <tr>
-                    <td><video id="preview" style="display: hidden;"></video></td>
+                    <td><video id="preview" style="display: none;"></video></td>
                 </tr>
             </table>
 
@@ -79,6 +79,12 @@
                         contentType: 'application/json',
                         url: '/',
                         success: function(data) {
+                            if (data == 'acknowledged') {
+                                scanner.start();
+                                return;
+                            } else if (data == '') {
+                                return;
+                            }
                             var preinfo = document.getElementById('info').innerHTML;
                             show_info(preinfo, "signed data", data);
 
