@@ -4,7 +4,7 @@ var logger = require('morgan');
 var curve = require('tweetnacl');
 var crypto = require('crypto');
 var fs = require('fs');
-var CronJob = require('cron').CronJob;
+var scheduler = require('node-schedule');
 var { exec } = require('child_process');
 
 var app = express();
@@ -17,22 +17,21 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
 
-io.on('connection', function(client) {
-    // do nothing
-});
+/*
+    Handling Schedule
+*/
+scheduled_events = [];
 
-// this needs to run every 10 days as we have a list of 10 precomputed keypairs
-new CronJob('*/2 * * * *', () => {
+// create new key schedule every 6 minutes. This hardly depends on how long a key is valid
+// currently this is every 3*validity
+var new_key_schedule_rule = new scheduler.RecurrenceRule();
+new_key_schedule_rule.minute = [0, 6, 12, 18, 24, 36, 42, 48, 54];
+
+scheduler.scheduleJob(new_key_schedule_rule, () => {
     console.log("[***] Generate new Key Schedule");
     generateNewKeySchedule(3);
-}, null, true);
+});
 
-// this needs to run every 24 hours as one key is valid for only that time
-new CronJob('* * * * *', () => {
-    setTimeout(() => {
-        getNextSignKey();
-    }, 30000);
-}, null, true);
 
 const SECRET_KEYPATH = __dirname + '/sk/';
 const PUBLIC_KEYPATH = __dirname + '/pk/';
@@ -41,7 +40,7 @@ var SHARED_KEY = fs.readFileSync(SECRET_KEYPATH + 'auth_key');
 var SIGNING_KEY = Buffer.from(fs.readFileSync(SECRET_KEYPATH + 'sign_key')).toString();
 SIGNING_KEY = str2buf(SIGNING_KEY, 'hex');
 
-// TODO: Signee needs to know this public key in order to authenticate the key schedule.
+// Signee needs to know this public key in order to authenticate the key schedule.
 generateNewKeySchedule(3);
 
 
@@ -194,7 +193,7 @@ function verifyAuth(msg, auth_token) {
     * enddate:      the end date provided by the reqeust
     * max_duration: How long can a signature be valid at max in days? Default 20 days.
 */
-function getValidityRange(startdate, enddate, max_duration=20) {
+function getValidityRange(startdate, enddate, type, max_duration=20) {
     validity = {};
     var today = new Date();
 
@@ -206,12 +205,22 @@ function getValidityRange(startdate, enddate, max_duration=20) {
     var valid_from = startdate;
     var valid_until = new Date();
 
-    var diff = timeDifference(startdate, enddate);
+    var diff = timeDifference(startdate, enddate, type);
 
     if ( diff < max_duration && diff > 0 ) {
         valid_until = enddate;
     } else {
-        valid_until = new Date(valid_until.setDate(valid_from.getDate() + max_duration));
+        switch (type) {
+            case 'minute':
+                valid_until = new Date(valid_until.setTime(valid_from.getTime() + (max_duration * 60000))); 
+                break;
+            case 'hour':
+                valid_until = new Date(valid_until.setTime(valid_from.getTime() + (max_duration * 60000 * 60))); 
+                break;   
+            default:
+                valid_until = new Date(valid_until.setDate(valid_from.getDate() + max_duration));
+                break;
+        }
     }
 
     validity['from'] = Date.parse(valid_from.toUTCString());
@@ -235,6 +244,7 @@ function generateKeyPair() {
 
 function generateNewKeySchedule(number_of_keys=10) {
 
+    scheduled_events = [];
     var start_date = new Date();
 
     fs.writeFileSync(SECRET_KEYPATH + 'sk_schedule', "");
@@ -245,11 +255,22 @@ function generateNewKeySchedule(number_of_keys=10) {
         secret_key = keypair.secretKey;
         public_key = keypair.publicKey;
 
+        /*
         start_date = new Date(start_date.setDate(start_date.getDate() + 1));
-        validity = getValidityRange(start_date, start_date, 1);
+        validity = getValidityRange(start_date, start_date, 'day', 1);
+        */
+        start_date = new Date(start_date.setTime(start_date.getTime() + 2 * 60000));
+        validity = getValidityRange(start_date, start_date, 'minute', 2);
 
         fs.appendFileSync(SECRET_KEYPATH + 'sk_schedule', new Date(validity.from) + "," + new Date(validity.until) + "," + buf2str(secret_key, 'hex') + '\n');
         fs.appendFileSync(PUBLIC_KEYPATH + 'pk_schedule', new Date(validity.from) + "," + new Date(validity.until) + "," + buf2str(public_key, 'hex') + '\n');
+
+        // add job to scheduler
+        var new_job = scheduler.scheduleJob(new Date(validity.from), () => {
+            getNextSignKey();
+            scheduled_events.shift();
+        });
+        scheduled_events.push(new_job);
     }
 
     sendCurrentKeySchedule(null, null, false);
@@ -298,12 +319,6 @@ function getNextSignKey() {
         from = new Date(new_line[0]);
         to = new Date(new_line[1]);
 
-        // check if the key is valid for this time
-        if (!isValid(from, to)) {
-            //TODO: remove this comment in production
-            //return;
-        }
-
         next_key = new_line[2];
 
         // delete current key from key schedule
@@ -316,7 +331,9 @@ function getNextSignKey() {
         fs.writeFileSync(SECRET_KEYPATH + 'sign_key', next_key);
         SIGNING_KEY = str2buf(next_key, 'hex');
 
-        console.log("NEW SIGNING KEY: ", Buffer.from(SIGNING_KEY).toString('hex'));
+        console.log("[***] NEW SIGNING KEY: ", Buffer.from(SIGNING_KEY).toString('hex'));
+    } else {
+        console.log("[***] No keys in the key schedule. Keep old PUBLIC KEY!");
     }
     
 }
@@ -351,7 +368,14 @@ function toDate(str, delim='/') {
     }
 }
 
-function timeDifference(date1, date2) {
+function timeDifference(date1, date2, type) {
     var timeDiff = Math.abs(date2.getTime() - date1.getTime());
-    return Math.ceil(timeDiff / (1000 * 3600 * 24));
+    switch (type) {
+        case 'minute':
+            return Math.ceil(timeDiff / (1000 * 60));
+        case 'hour':
+            return Math.ceil(timeDiff / (1000 * 60 * 60));
+        default:
+            return Math.ceil(timeDiff / (1000 * 3600 * 24));
+    }
 }

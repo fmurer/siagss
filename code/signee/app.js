@@ -4,7 +4,7 @@ var logger = require('morgan');
 var curve = require('tweetnacl');
 var crypto = require('crypto');
 var fs = require('fs');
-var CronJob = require('cron').CronJob;
+var scheduler = require('node-schedule');
 var { exec } = require('child_process');
 
 var app = express();
@@ -16,12 +16,13 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
-// this needs to run every 24 hours as one key is valid for only that time
-new CronJob('* * * * *', () => {
-    setTimeout(() => {
-        getNextPubKey();
-    }, 30000);
-}, null, true);
+
+
+/*
+    Handling Schedule
+*/
+scheduled_events = [];
+
 
 const SHARED_KEY_PATH = __dirname + '/sk/';
 const PUBLIC_KEYPATH = __dirname + '/pk/';
@@ -68,7 +69,18 @@ io.on('connection', function(client) {
         ack['ack'] = "I have received the key schedule";
         ack['auth'] = generateAuthToken(ack['ack']);
         io.sockets.emit('ack', ack);
+
         parseKeySchedule(data);
+
+
+        // start handling the new request (if there is one)
+        const new_request = request_queue.shift();
+        if (new_request) {
+            requestHandler(new_request);
+        } else {
+            io.sockets.emit('clear_screen', null);
+            request_number = 0;
+        }
     });
 });
 
@@ -255,6 +267,7 @@ function parseKeySchedule(data) {
         return;
     }
 
+    scheduled_events = [];
     console.log("[***] Received new Key Schedule");
 
     keys = schedule.keys;
@@ -265,6 +278,13 @@ function parseKeySchedule(data) {
         if (keys.hasOwnProperty(key)) {
             line = keys[key].valid_from + "," + keys[key].valid_to + "," + keys[key].public_key + "\n";
             fs.appendFileSync(PUBLIC_KEYPATH + 'pk_schedule', line);
+
+            // set schedule entry when to get the next key
+            var new_job = scheduler.scheduleJob(keys[key].valid_from, () => {
+                getNextPubKey();
+                scheduled_events.shift();
+            });
+            scheduled_events.push(new_job);
         }
     }
 }
@@ -278,12 +298,6 @@ function getNextPubKey() {
 
         from = new Date(new_line[0]);
         to = new Date(new_line[1]);
-
-        // check if the key is valid for this time
-        if (!isValid(from, to)) {
-            //TODO: remove this comment in production
-            //return;
-        }
 
         next_key = new_line[2];
 
@@ -299,6 +313,8 @@ function getNextPubKey() {
         PUBLIC_KEY = str2buf(next_key, 'hex');
 
         console.log("[***] NEW PUBLIC KEY: ", Buffer.from(PUBLIC_KEY).toString('hex'));
+    } else {
+        console.log("[***] No keys in the key schedule. Keep old PUBLIC KEY!");
     }
     
 }
