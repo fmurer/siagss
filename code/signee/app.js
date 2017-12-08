@@ -31,6 +31,7 @@ var SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH + 'auth_key');
 var PUBLIC_KEY = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'signer.pub')).toString();
 PUBLIC_KEY = str2buf(PUBLIC_KEY, 'hex');
 
+
 var hmac;
 
 /*
@@ -41,6 +42,9 @@ const callbacks = new Map();
 
 io.on('connection', function(client) {
     client.setMaxListeners(0);
+
+    // as soon browser is on, ask for key schedule
+    getNewKeySchedule(true);
 
     client.on('answer', (data) => {
 
@@ -286,6 +290,26 @@ function parseKeySchedule(data) {
             });
             scheduled_events.push(new_job);
         }
+    }
+
+    // add schedule entry for getting the new key schedule
+    var last_key = Object.keys(keys)[Object.keys(keys).length() - 1];
+    var end_date = new Date(last_key.valid_to.getTime() - 60000);
+    var new_job = scheduler.scheduleJob(end_date, () => {
+        getNewKeySchedule();
+    });
+    scheduled_events.push(new_job);
+}
+
+function getNewKeySchedule(initial=false) {
+    data = {};
+    data['new_schedule'] = "Give me a new key schedule";
+
+    // prioritize the request and push it to the front of the request_queue
+    if (initial) {
+        io.sockets.emit('update_img', data);
+    } else {
+        request_queue.unshift(data);
     }
 }
 

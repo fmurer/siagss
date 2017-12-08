@@ -151,23 +151,6 @@
                     $('#qr_code').empty().qrcode(options);
                 }
 
-                $(this).on('keypress', function(event) {
-                    // if key 'k' is pressed
-                    if (event.which == 107) {
-                        qrcode = {};
-                        qrcode['qrcode'] = 'key_schedule';
-                        $.ajax({
-                            type: 'POST',
-                            data: JSON.stringify(qrcode),
-                            contentType: 'application/json',
-                            url: '/',
-                            success: function(data) {
-                                show_info("", "key schedule", data);
-                                generateQRCode(data);
-                            }
-                        });
-                    }
-                });
             </script>
         </div>
     </body>

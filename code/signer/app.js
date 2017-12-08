@@ -24,6 +24,7 @@ scheduled_events = [];
 
 // create new key schedule every 6 minutes. This hardly depends on how long a key is valid
 // currently this is every 3*validity
+/*
 var new_key_schedule_rule = new scheduler.RecurrenceRule();
 new_key_schedule_rule.minute = [0, 6, 12, 18, 24, 36, 42, 48, 54];
 
@@ -31,7 +32,7 @@ scheduler.scheduleJob(new_key_schedule_rule, () => {
     console.log("[***] Generate new Key Schedule");
     generateNewKeySchedule(3);
 });
-
+*/
 
 const SECRET_KEYPATH = __dirname + '/sk/';
 const PUBLIC_KEYPATH = __dirname + '/pk/';
@@ -53,15 +54,15 @@ app.get('/', function(req, res, next) {
 
 app.post('/', function(req, res) {
 
-    if (req.body.qrcode == 'key_schedule') {
-        sendCurrentKeySchedule(req, res);
-        return;
-    }
-
     incoming_request = JSON.parse(req.body.qrcode);
 
     if (incoming_request.signee_key) {
         pairSystems(req, res);
+        return;
+    }
+
+    if (incoming_request.data.new_schedule) {
+        sendCurrentKeySchedule();
         return;
     }
 
@@ -273,10 +274,14 @@ function generateNewKeySchedule(number_of_keys=10) {
         scheduled_events.push(new_job);
     }
 
-    sendCurrentKeySchedule(null, null, false);
+    // schedule job for creating next key schedule
+    var new_job = scheduler(new Date(validity.to.getTime() - 65000), () => {
+        generateNewKeySchedule(3);
+    });
+    scheduled_events.push(new_job);
 }
 
-function sendCurrentKeySchedule(req, res, is_request=true) {
+function sendCurrentKeySchedule() {
     schedule = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'pk_schedule')).toString();
     schedule = schedule.split('\n');
 
@@ -300,11 +305,8 @@ function sendCurrentKeySchedule(req, res, is_request=true) {
     }
     key_schedule['keys'] = keys;
     key_schedule['signature'] = signRequest(keys);
-    if (is_request) {
-        res.json(key_schedule);
-    } else {
-        io.sockets.emit('update_img', key_schedule);
-    }
+
+    io.sockets.emit('update_img', key_schedule);    
 
 }
 
