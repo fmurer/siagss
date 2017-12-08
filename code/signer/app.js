@@ -24,6 +24,7 @@ var seconds = [];
 /*
     Handling Schedule
 */
+/*
 for (var i =  0; i<60; i++) {
     seconds[i] = i;
 }
@@ -40,7 +41,7 @@ scheduler.scheduleJob({second: seconds}, () => {
         }, time);
     }
 
-});
+});*/
 
 
 // create new key schedule every 6 minutes. This hardly depends on how long a key is valid
@@ -66,6 +67,29 @@ SIGNING_KEY = str2buf(SIGNING_KEY, 'hex');
 generateNewKeySchedule(3);
 
 
+
+io.on('connection', (client) => {
+
+    client.on('received', () => {
+        launchRequest();
+    });
+
+    client.on('new_request', (data) => {
+        if (data.signee_key) {
+            pairSystems(data);
+            return;
+        }
+
+        request = {};
+        request['data'] = data; 
+        
+        if (data.new_schedule) {
+            request_queue.unshift(request);
+        } else {
+            request_queue.push(request);
+        }
+    });
+})
 /*
     handle requests
 */
@@ -85,7 +109,7 @@ app.post('/', function(req, res) {
 
         request = {};
         request['data'] = incoming_request;
-        request['res'] = res;
+        request['response'] = res;
         //sendCurrentKeySchedule();
         request_queue.unshift(request);
         return;
@@ -104,14 +128,15 @@ server.listen(3000);
 function launchRequest() {
     var new_request = request_queue.shift();
     if (new_request) {
-        requestHandler(new_request.data, new_request.response);
+        //requestHandler(new_request.data, new_request.response);
+        requestHandler(new_request.data);
     }
 }
 
-function requestHandler(incoming_request, res) {
+function requestHandler(incoming_request) {
     
     if (incoming_request.new_schedule) {
-        sendCurrentKeySchedule(res);
+        sendCurrentKeySchedule();
         return;
     }
 
@@ -154,7 +179,8 @@ function requestHandler(incoming_request, res) {
     respond_data['signature'] = signature;
 
     // send back response to the ajax success function which will then generate the qr code.
-    res.json(respond_data);
+    //res.json(respond_data);
+    io.sockets.emit('update_img', respond_data);
 }
 
 /*
@@ -165,11 +191,11 @@ function requestHandler(incoming_request, res) {
     This function is called when we receive the Diffie-Hellman half key of the signee. Then we also compute our own
     half key and send it to the singee. With the two half keys we compute the new shared key and write it to the file 'auth_key'
 */
-function pairSystems(req, res) {
+function pairSystems(data) {
 
     console.log("PAIRING");
 
-    var data = JSON.parse(req.body.qrcode);
+    //var data = JSON.parse(req.body.qrcode);
 
     if (data.auth) {
         if (!verifyAuth(data.signee_key, data.auth)) {
@@ -198,7 +224,7 @@ function pairSystems(req, res) {
     //res.json(dh_exchange);
     response = {};
     response['data'] = dh_exchange;
-    respnose['response'] = res;
+    //respnose['response'] = res;
 
     request_queue.unshift(response);
 }
@@ -333,7 +359,7 @@ function generateNewKeySchedule(number_of_keys=10) {
     scheduled_events.push(new_job);
 }
 
-function sendCurrentKeySchedule(res) {
+function sendCurrentKeySchedule() {
     schedule = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'pk_schedule')).toString();
     schedule = schedule.split('\n');
 
@@ -358,8 +384,8 @@ function sendCurrentKeySchedule(res) {
     key_schedule['keys'] = keys;
     key_schedule['signature'] = signRequest(keys);
 
-    //io.sockets.emit('update_img', key_schedule);    
-    res.json(key_schedule);
+    io.sockets.emit('update_img', key_schedule);    
+    //res.json(key_schedule);
 }
 
 function getNextSignKey() {

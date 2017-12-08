@@ -21,11 +21,21 @@ var request_queue = [];
 var request_number = 0;
 var scheduled_events = [];
 var seconds = [];
+var dh;
+var hmac;
+const callbacks = new Map();
 
+const SHARED_KEY_PATH = __dirname + '/sk/';
+const PUBLIC_KEYPATH = __dirname + '/pk/';
+
+var SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH + 'auth_key');
+var PUBLIC_KEY = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'signer.pub')).toString();
+PUBLIC_KEY = str2buf(PUBLIC_KEY, 'hex');
 
 /*
     Handling Schedule
 */
+/*
 for (var i =  0; i<60; i++) {
     seconds[i] = i;
 }
@@ -41,30 +51,21 @@ scheduler.scheduleJob({second: seconds}, () => {
         }, time);
     }
 
-});
+});*/
 
-
-const SHARED_KEY_PATH = __dirname + '/sk/';
-const PUBLIC_KEYPATH = __dirname + '/pk/';
-
-var SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH + 'auth_key');
-var PUBLIC_KEY = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'signer.pub')).toString();
-PUBLIC_KEY = str2buf(PUBLIC_KEY, 'hex');
-
-
-var hmac;
 
 /*
     Socket IO stuff
 */
-
-const callbacks = new Map();
-
 io.on('connection', function(client) {
     client.setMaxListeners(0);
 
     // as soon browser is on, ask for key schedule
     getNewKeySchedule(true);
+
+    client.on('received', () => {
+        launchRequest()
+    });
 
     client.on('answer', (data) => {
 
@@ -73,22 +74,12 @@ io.on('connection', function(client) {
             cb(data);
             callbacks.delete(data.id);
         }
-
-        /*
-        // start handling the new request (if there is one)
-        const new_request = request_queue.shift();
-        if (new_request) {
-            requestHandler(new_request);
-        } else {
-            io.sockets.emit('clear_screen', null);
-            request_number = 0;
-        }*/
     });
 
     client.on('pairStep1', (data) => {
         pairSystemsSetup();  
     });
-    
+
     client.on('pairStep2', (data) => {
         pairSystemsGenKey(data);
     });
@@ -96,20 +87,10 @@ io.on('connection', function(client) {
     client.on('key_schedule', (data) => {
         ack = {};
         ack['ack'] = "I have received the key schedule";
-        ack['auth'] = generateAuthToken(ack['ack']);
-        io.sockets.emit('ack', ack);
+
+        request_queue.unshift(ack);
 
         parseKeySchedule(data);
-
-        /*
-        // start handling the new request (if there is one)
-        const new_request = request_queue.shift();
-        if (new_request) {
-            requestHandler(new_request);
-        } else {
-            io.sockets.emit('clear_screen', null);
-            request_number = 0;
-        }*/
     });
 });
 
@@ -124,13 +105,6 @@ app.get('/', function(req, res, next) {
 
 app.post('/', function(request, response) {
 
-    /*
-    if (request.body.data == 'pairing') {
-        pairSystemsSetup();
-        response.end();
-        return;
-    }*/
-
     // generate request id
     var hash = crypto.createHash('sha256');
     var data = request.body;
@@ -142,15 +116,13 @@ app.post('/', function(request, response) {
         returnResponse(data, request, response);
     });
 
-    /*
     if (request_number == 0) {
-        requestHandler(data);
         request_number = 1;
+        requestHandler(data);
     } else {
         request_queue.push(data);
-    }*/
-    request_queue.push(data);
-
+    }
+    
 });
 
 server.setTimeout(0);
@@ -161,6 +133,8 @@ function launchRequest() {
     var new_request = request_queue.shift();
     if (new_request) {
         requestHandler(new_request);
+    } else {
+        request_number = 0;
     }
 }
 
@@ -175,10 +149,12 @@ function requestHandler(data) {
 
     var data_to_send = {};
     data_to_send['data'] = data;
-    console.time('auth_token_generation_time');
-    data_to_send['auth'] = generateAuthToken(JSON.stringify(data));
-    console.timeEnd('auth_token_generation_time');
 
+    if (SHARED_KEY != "") {
+        console.time('auth_token_generation_time');
+        data_to_send['auth'] = generateAuthToken(JSON.stringify(data));
+        console.timeEnd('auth_token_generation_time');
+    }
 
     // notify the browser which then sets the qr-code
     io.sockets.emit('update_img', data_to_send);
@@ -244,8 +220,6 @@ function resendRequest(req, res, data) {
     request_queue.unshift(data_orig)
 }
 
-var dh;
-
 /*
     This function is the beginning of the pairing, i.e., establishing a new shared key for authentication.
     It creates a new Diffie-Hellmann half key using the ECDH algorighm and notifies the browser to generate the
@@ -263,12 +237,18 @@ function pairSystemsSetup() {
     var dh_exchange = {};
     dh_exchange['signee_key'] = signee_key;
 
+    /*
     if (SHARED_KEY != "") {
         dh_exchange['auth'] = generateAuthToken(signee_key);
     }
+    */
 
-    io.sockets.emit('update_img', dh_exchange);
-
+    //io.sockets.emit('update_img', dh_exchange);
+    if (request_number == 0) {
+        io.sockets.emit('update_img', dh_exchange);
+    } else {
+        request_queue.unshift(dh_exchange);
+    }
 }
 
 /*
