@@ -17,10 +17,31 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
 
+var scheduled_events = [];
+var request_queue = [];
+var seconds = [];
+
 /*
     Handling Schedule
 */
-scheduled_events = [];
+for (var i =  0; i<60; i++) {
+    seconds[i] = i;
+}
+num_per_sec = 8;
+scheduler.scheduleJob({second: seconds}, () => {
+    launchRequest();
+    
+    step = 1000/num_per_sec;
+
+    for (var i = 0; i < num_per_sec; i++) {
+        time = step + i*step;
+        setTimeout(() => {
+            launchRequest();
+        }, time);
+    }
+
+});
+
 
 // create new key schedule every 6 minutes. This hardly depends on how long a key is valid
 // currently this is every 3*validity
@@ -53,7 +74,6 @@ app.get('/', function(req, res, next) {
 });
 
 app.post('/', function(req, res) {
-
     incoming_request = JSON.parse(req.body.qrcode);
 
     if (incoming_request.signee_key) {
@@ -62,7 +82,36 @@ app.post('/', function(req, res) {
     }
 
     if (incoming_request.new_schedule) {
-        sendCurrentKeySchedule();
+
+        request = {};
+        request['data'] = incoming_request;
+        request['res'] = res;
+        //sendCurrentKeySchedule();
+        request_queue.unshift(request);
+        return;
+    }
+
+    request = {};
+    request['data'] = incoming_request;
+    request['response'] = res;
+
+    request_queue.push(request);
+});
+
+server.listen(3000);
+
+
+function launchRequest() {
+    var new_request = request_queue.shift();
+    if (new_request) {
+        requestHandler(new_request.data, new_request.response);
+    }
+}
+
+function requestHandler(incoming_request, res) {
+    
+    if (incoming_request.new_schedule) {
+        sendCurrentKeySchedule(res);
         return;
     }
 
@@ -106,10 +155,7 @@ app.post('/', function(req, res) {
 
     // send back response to the ajax success function which will then generate the qr code.
     res.json(respond_data);
-});
-
-server.listen(3000);
-
+}
 
 /*
     This function handles the pairing of the two systems, i.e., establishing a new shared secret for authentication
@@ -148,7 +194,13 @@ function pairSystems(req, res) {
     SHARED_KEY = shared_key
     console.log(SHARED_KEY);
     fs.writeFileSync(SECRET_KEYPATH + 'auth_key', SHARED_KEY);
-    res.json(dh_exchange);
+    
+    //res.json(dh_exchange);
+    response = {};
+    response['data'] = dh_exchange;
+    respnose['response'] = res;
+
+    request_queue.unshift(response);
 }
 
 /*
@@ -281,7 +333,7 @@ function generateNewKeySchedule(number_of_keys=10) {
     scheduled_events.push(new_job);
 }
 
-function sendCurrentKeySchedule() {
+function sendCurrentKeySchedule(res) {
     schedule = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'pk_schedule')).toString();
     schedule = schedule.split('\n');
 
@@ -306,8 +358,8 @@ function sendCurrentKeySchedule() {
     key_schedule['keys'] = keys;
     key_schedule['signature'] = signRequest(keys);
 
-    io.sockets.emit('update_img', key_schedule);    
-
+    //io.sockets.emit('update_img', key_schedule);    
+    res.json(key_schedule);
 }
 
 function getNextSignKey() {

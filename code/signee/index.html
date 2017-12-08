@@ -82,7 +82,7 @@
 
                     if (json.signer_key) {
                         show_info(preinfo, "received answer from signer", json);
-                        socket.emit('pair', json);
+                        socket.emit('pairStep2', json);
                     } else if (json.keys) {
                         socket.emit('key_schedule', json);
                     } else {
@@ -150,17 +150,7 @@
                 $(this).on('keypress', function(event) {
                     // if key 'p' is pressed
                     if (event.which == 112) {
-                        data = {};
-                        data['data'] = 'pairing';
-                        $.ajax({
-                            type: 'POST',
-                            data: JSON.stringify(data),
-                            contentType: 'application/json',
-                            url: '/',
-                            success: function(data) {
-                                console.log("paired the systems");
-                            }
-                        });
+                        socket.emit('pairStep1', null);
                     }
                 });
             </script>

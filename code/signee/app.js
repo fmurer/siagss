@@ -17,11 +17,31 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
 
+var request_queue = [];
+var request_number = 0;
+var scheduled_events = [];
+var seconds = [];
+
 
 /*
     Handling Schedule
 */
-scheduled_events = [];
+for (var i =  0; i<60; i++) {
+    seconds[i] = i;
+}
+num_per_sec = 4;
+scheduler.scheduleJob({second: seconds}, () => {
+    launchRequest();
+    step = 1000/num_per_sec;
+
+    for (var i = 0; i < num_per_sec; i++) {
+        time = step + i*step;
+        setTimeout(() => {
+            launchRequest();
+        }, time);
+    }
+
+});
 
 
 const SHARED_KEY_PATH = __dirname + '/sk/';
@@ -54,6 +74,7 @@ io.on('connection', function(client) {
             callbacks.delete(data.id);
         }
 
+        /*
         // start handling the new request (if there is one)
         const new_request = request_queue.shift();
         if (new_request) {
@@ -61,10 +82,14 @@ io.on('connection', function(client) {
         } else {
             io.sockets.emit('clear_screen', null);
             request_number = 0;
-        }
+        }*/
     });
 
-    client.on('pair', (data) => {
+    client.on('pairStep1', (data) => {
+        pairSystemsSetup();  
+    });
+    
+    client.on('pairStep2', (data) => {
         pairSystemsGenKey(data);
     });
 
@@ -76,7 +101,7 @@ io.on('connection', function(client) {
 
         parseKeySchedule(data);
 
-
+        /*
         // start handling the new request (if there is one)
         const new_request = request_queue.shift();
         if (new_request) {
@@ -84,7 +109,7 @@ io.on('connection', function(client) {
         } else {
             io.sockets.emit('clear_screen', null);
             request_number = 0;
-        }
+        }*/
     });
 });
 
@@ -97,16 +122,14 @@ app.get('/', function(req, res, next) {
 });
 
 
-var request_queue = [];
-var request_number = 0;
-
 app.post('/', function(request, response) {
 
+    /*
     if (request.body.data == 'pairing') {
         pairSystemsSetup();
         response.end();
         return;
-    }
+    }*/
 
     // generate request id
     var hash = crypto.createHash('sha256');
@@ -119,18 +142,27 @@ app.post('/', function(request, response) {
         returnResponse(data, request, response);
     });
 
+    /*
     if (request_number == 0) {
         requestHandler(data);
         request_number = 1;
     } else {
         request_queue.push(data);
-    }
+    }*/
+    request_queue.push(data);
 
 });
 
 server.setTimeout(0);
 server.listen(3000);
 
+
+function launchRequest() {
+    var new_request = request_queue.shift();
+    if (new_request) {
+        requestHandler(new_request);
+    }
+}
 
 /*
     This function handles the requests from the request_queue. 
