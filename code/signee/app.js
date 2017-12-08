@@ -293,8 +293,8 @@ function parseKeySchedule(data) {
     }
 
     // add schedule entry for getting the new key schedule
-    var last_key = Object.keys(keys)[Object.keys(keys).length() - 1];
-    var end_date = new Date(last_key.valid_to.getTime() - 60000);
+    var last_key = Object.keys(keys)[Object.keys(keys).length - 1];
+    var end_date = (new Date(last_key.valid_to)).getTime() - 60000;
     var new_job = scheduler.scheduleJob(end_date, () => {
         getNewKeySchedule();
     });

@@ -61,7 +61,7 @@ app.post('/', function(req, res) {
         return;
     }
 
-    if (incoming_request.data.new_schedule) {
+    if (incoming_request.new_schedule) {
         sendCurrentKeySchedule();
         return;
     }
@@ -275,7 +275,7 @@ function generateNewKeySchedule(number_of_keys=10) {
     }
 
     // schedule job for creating next key schedule
-    var new_job = scheduler(new Date(validity.to.getTime() - 65000), () => {
+    var new_job = scheduler.scheduleJob((new Date(validity.until)).getTime() - 65000, () => {
         generateNewKeySchedule(3);
     });
     scheduled_events.push(new_job);
