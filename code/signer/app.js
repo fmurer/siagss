@@ -17,10 +17,8 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
 
-/*
-    Handling Schedule
-*/
-scheduled_events = [];
+
+var last_end_date
 
 // create new key schedule every 6 minutes. This hardly depends on how long a key is valid
 // currently this is every 3*validity
@@ -245,9 +243,12 @@ function generateKeyPair() {
 
 function generateNewKeySchedule(number_of_keys=10) {
 
-    scheduled_events = [];
-    var start_date = new Date();
-
+    if (last_end_date) {
+        start_date = last_end_date;
+    } else {
+        start_date = new Date();    
+    }
+    
     fs.writeFileSync(SECRET_KEYPATH + 'sk_schedule', "");
     fs.writeFileSync(PUBLIC_KEYPATH + 'pk_schedule', "");
 
@@ -256,11 +257,12 @@ function generateNewKeySchedule(number_of_keys=10) {
         secret_key = keypair.secretKey;
         public_key = keypair.publicKey;
 
+
         /*
         start_date = new Date(start_date.setDate(start_date.getDate() + 1));
         validity = getValidityRange(start_date, start_date, 'day', 1);
         */
-        start_date = new Date(start_date.setTime(start_date.getTime() + 2 * 60000));
+        //start_date = new Date(start_date.setTime(start_date.getTime() + 2 * 60000));
         validity = getValidityRange(start_date, start_date, 'minute', 2);
 
         fs.appendFileSync(SECRET_KEYPATH + 'sk_schedule', new Date(validity.from) + "," + new Date(validity.until) + "," + buf2str(secret_key, 'hex') + '\n');
@@ -269,16 +271,17 @@ function generateNewKeySchedule(number_of_keys=10) {
         // add job to scheduler
         var new_job = scheduler.scheduleJob(new Date(validity.from), () => {
             getNextSignKey();
-            scheduled_events.shift();
         });
-        scheduled_events.push(new_job);
+
+        start_date = new Date(start_date.setTime(start_date.getTime() + 2 * 60000));
     }
 
+    last_end_date = valid.until;
+
     // schedule job for creating next key schedule
-    var new_job = scheduler.scheduleJob((new Date(validity.until)).getTime() - 65000, () => {
+    var new_job = scheduler.scheduleJob((new Date(validity.until)).getTime() - 40000, () => {
         generateNewKeySchedule(3);
     });
-    scheduled_events.push(new_job);
 }
 
 function sendCurrentKeySchedule() {

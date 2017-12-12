@@ -21,7 +21,6 @@ app.use(logger('dev'));
 /*
     Handling Schedule
 */
-scheduled_events = [];
 
 
 const SHARED_KEY_PATH = __dirname + '/sk/';
@@ -271,7 +270,6 @@ function parseKeySchedule(data) {
         return;
     }
 
-    scheduled_events = [];
     console.log("[***] Received new Key Schedule");
 
     keys = schedule.keys;
@@ -286,19 +284,16 @@ function parseKeySchedule(data) {
             // set schedule entry when to get the next key
             var new_job = scheduler.scheduleJob(keys[key].valid_from, () => {
                 getNextPubKey();
-                scheduled_events.shift();
             });
-            scheduled_events.push(new_job);
         }
     }
 
     // add schedule entry for getting the new key schedule
     var last_key = Object.keys(keys)[Object.keys(keys).length - 1];
-    var end_date = (new Date(last_key.valid_to)).getTime() - 60000;
+    var end_date = (new Date(last_key.valid_to)).getTime() - 30000;
     var new_job = scheduler.scheduleJob(end_date, () => {
         getNewKeySchedule();
     });
-    scheduled_events.push(new_job);
 }
 
 function getNewKeySchedule(initial=false) {
