@@ -22,7 +22,7 @@ app.use(logger('dev'));
     Handling Schedule
 */
 
-
+const NUM_REQUESTS = 4;
 const SHARED_KEY_PATH = __dirname + '/sk/';
 const PUBLIC_KEYPATH = __dirname + '/pk/';
 
@@ -54,9 +54,18 @@ io.on('connection', function(client) {
         }
 
         // start handling the new request (if there is one)
-        const new_request = request_queue.shift();
-        if (new_request) {
-            requestHandler(new_request);
+        //const new_request = request_queue.shift();
+        new_requests = [];
+        for (var i = 0; i < NUM_REQUESTS; i++) {
+            r = request_queue.shift();
+            if (r) {
+                new_requests.push(r);
+            }
+        }
+
+        console.log(new_requests);
+        if (new_requests.length >= 1) {
+            requestHandler(new_requests);
         } else {
             io.sockets.emit('clear_screen', null);
             request_number = 0;
@@ -119,6 +128,7 @@ app.post('/', function(request, response) {
     });
 
     if (request_number == 0) {
+        data = [data];
         requestHandler(data);
         request_number = 1;
     } else {
@@ -141,9 +151,12 @@ server.listen(3000);
 function requestHandler(data) {
 
     var data_to_send = {};
-    data_to_send['data'] = data;
+
+    for (var i = 0; i < data.length; i++) {
+        data_to_send['data' + i] = data[i];
+    }
     console.time('auth_token_generation_time');
-    data_to_send['auth'] = generateAuthToken(JSON.stringify(data));
+    data_to_send['auth'] = generateAuthToken(JSON.stringify(data_to_send));
     console.timeEnd('auth_token_generation_time');
 
 
