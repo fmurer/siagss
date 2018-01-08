@@ -165,7 +165,7 @@ function signRequest(data) {
 function generateAuthToken(msg) {
     hmac = crypto.createHmac('sha256', SHARED_KEY);
     hmac.update(msg);
-    return hmac.digest('hex');
+    return hmac.digest('base64');
 }
 
 /*
@@ -178,7 +178,7 @@ function generateAuthToken(msg) {
 function verifyAuth(msg, auth_token) {
     hmac = crypto.createHmac('sha256', SHARED_KEY);
     hmac.update(msg);
-    return auth_token == hmac.digest('hex');
+    return auth_token == hmac.digest('base64');
 }
 
 /*

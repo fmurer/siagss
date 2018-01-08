@@ -22,7 +22,7 @@ app.use(logger('dev'));
     Handling Schedule
 */
 
-const NUM_REQUESTS = 4;
+const NUM_REQUESTS = 3;
 const SHARED_KEY_PATH = __dirname + '/sk/';
 const PUBLIC_KEYPATH = __dirname + '/pk/';
 
@@ -47,11 +47,16 @@ io.on('connection', function(client) {
 
     client.on('answer', (data) => {
 
-        const cb = callbacks.get(data.id);
-        if (cb) {
-            cb(data);
-            callbacks.delete(data.id);
+        var num_entries = Object.keys(data).length;
+
+        for (var i = 0; i < num_entries; i++) {
+            const cb = callbacks.get(data[i].id);
+            if (cb) {
+                cb(data[i]);
+                callbacks.delete(data[i].id);
+            }    
         }
+        
 
         // start handling the new request (if there is one)
         //const new_request = request_queue.shift();
@@ -63,7 +68,6 @@ io.on('connection', function(client) {
             }
         }
 
-        console.log(new_requests);
         if (new_requests.length >= 1) {
             requestHandler(new_requests);
         } else {
@@ -121,7 +125,7 @@ app.post('/', function(request, response) {
     var data = request.body;
     
     hash.update(JSON.stringify(data));
-    data['id'] = hash.digest('hex');
+    data['id'] = hash.digest('base64');
 
     callbacks.set(data.id, (data) => {
         returnResponse(data, request, response);
@@ -217,7 +221,7 @@ function resendRequest(req, res, data) {
     var hash = crypto.createHash('sha256');
     var data_orig = req.body;
     hash.update(JSON.stringify(data_orig));
-    data_orig['id'] = hash.digest('hex');
+    data_orig['id'] = hash.digest('base64');
 
     // reissue the request on authentication failure
     callbacks.set(data_orig.id, (data) => {
@@ -367,7 +371,7 @@ function isValid(from, to) {
 function generateAuthToken(msg) {
     hmac = crypto.createHmac('sha256', SHARED_KEY);
     hmac.update(msg);
-    return hmac.digest('hex');
+    return hmac.digest('base64');
 }
 
 /*
@@ -380,7 +384,7 @@ function generateAuthToken(msg) {
 function verifyAuth(msg, auth_token) {
     hmac = crypto.createHmac('sha256', SHARED_KEY);
     hmac.update(msg);
-    return auth_token == hmac.digest('hex');
+    return auth_token == hmac.digest('base64');
 }
 
 /*
