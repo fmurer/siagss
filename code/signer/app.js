@@ -18,19 +18,7 @@ app.use(logger('dev'));
 
 
 
-var last_end_date
-
-// create new key schedule every 6 minutes. This hardly depends on how long a key is valid
-// currently this is every 3*validity
-/*
-var new_key_schedule_rule = new scheduler.RecurrenceRule();
-new_key_schedule_rule.minute = [0, 6, 12, 18, 24, 36, 42, 48, 54];
-
-scheduler.scheduleJob(new_key_schedule_rule, () => {
-    console.log("[***] Generate new Key Schedule");
-    generateNewKeySchedule(3);
-});
-*/
+var last_end_date;
 
 const SECRET_KEYPATH = __dirname + '/sk/';
 const PUBLIC_KEYPATH = __dirname + '/pk/';
@@ -158,7 +146,7 @@ function pairSystems(req, res) {
 function signRequest(data) {
     console.time('signing_time');
     var signature = curve.sign.detached(json2buf(data, encoding='ascii'), SIGNING_KEY);
-    signature = Buffer.from(signature).toString('hex');
+    signature = Buffer.from(signature).toString('base64');
     console.timeEnd('signing_time');
     return signature;
 }
@@ -265,8 +253,8 @@ function generateNewKeySchedule(number_of_keys=10) {
         //start_date = new Date(start_date.setTime(start_date.getTime() + 2 * 60000));
         validity = getValidityRange(start_date, start_date, 'minute', 2);
 
-        fs.appendFileSync(SECRET_KEYPATH + 'sk_schedule', new Date(validity.from) + "," + new Date(validity.until) + "," + buf2str(secret_key, 'hex') + '\n');
-        fs.appendFileSync(PUBLIC_KEYPATH + 'pk_schedule', new Date(validity.from) + "," + new Date(validity.until) + "," + buf2str(public_key, 'hex') + '\n');
+        fs.appendFileSync(SECRET_KEYPATH + 'sk_schedule', new Date(validity.from) + "," + new Date(validity.until) + "," + buf2str(secret_key, 'base64') + '\n');
+        fs.appendFileSync(PUBLIC_KEYPATH + 'pk_schedule', new Date(validity.from) + "," + new Date(validity.until) + "," + buf2str(public_key, 'base64') + '\n');
 
         // add job to scheduler
         var new_job = scheduler.scheduleJob(new Date(validity.from), () => {
@@ -334,9 +322,9 @@ function getNextSignKey() {
         })
 
         fs.writeFileSync(SECRET_KEYPATH + 'sign_key', next_key);
-        SIGNING_KEY = str2buf(next_key, 'hex');
+        SIGNING_KEY = str2buf(next_key, 'base64');
 
-        console.log("[***] NEW SIGNING KEY: ", Buffer.from(SIGNING_KEY).toString('hex'));
+        console.log("[***] NEW SIGNING KEY: ", Buffer.from(SIGNING_KEY).toString('base64'));
     } else {
         console.log("[***] No keys in the key schedule. Keep old PUBLIC KEY!");
     }

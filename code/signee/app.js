@@ -28,7 +28,7 @@ const PUBLIC_KEYPATH = __dirname + '/pk/';
 
 var SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH + 'auth_key');
 var PUBLIC_KEY = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'signer.pub')).toString();
-PUBLIC_KEY = str2buf(PUBLIC_KEY, 'hex');
+PUBLIC_KEY = str2buf(PUBLIC_KEY, 'base64');
 
 
 var hmac;
@@ -329,9 +329,9 @@ function getNextPubKey() {
 
         // and move it to the file storing the current public key of the signer
         fs.writeFileSync(PUBLIC_KEYPATH + 'signer.pub', next_key);
-        PUBLIC_KEY = str2buf(next_key, 'hex');
+        PUBLIC_KEY = str2buf(next_key, 'base64');
 
-        console.log("[***] NEW PUBLIC KEY: ", Buffer.from(PUBLIC_KEY).toString('hex'));
+        console.log("[***] NEW PUBLIC KEY: ", Buffer.from(PUBLIC_KEY).toString('base64'));
     } else {
         console.log("[***] No keys in the key schedule. Keep old PUBLIC KEY!");
     }
@@ -371,7 +371,7 @@ function verifyAuth(msg, auth_token) {
     This function verifies the signature of the response. If the verification is successful, it returns true otherwise false.
 */
 function verifySignature(msg, signature) {
-    return curve.sign.detached.verify(json2buf(msg, 'ascii'), str2buf(signature, 'hex'), PUBLIC_KEY);
+    return curve.sign.detached.verify(json2buf(msg, 'ascii'), str2buf(signature, 'base64'), PUBLIC_KEY);
 }
 
 /*

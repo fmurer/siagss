@@ -1,8 +1,8 @@
 #!/bin/bash
 
 keypair="$(node -e 'keyPair = require("../signer/node_modules/tweetnacl").sign.keyPair();
-console.log(Buffer.from(keyPair.publicKey).toString("hex"));
-console.log(Buffer.from(keyPair.secretKey).toString("hex"));
+console.log(Buffer.from(keyPair.publicKey).toString("base64"));
+console.log(Buffer.from(keyPair.secretKey).toString("base64"));
 console.log("");')"
 
 echo "${keypair}"
