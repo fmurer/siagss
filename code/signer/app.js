@@ -25,7 +25,7 @@ const PUBLIC_KEYPATH = __dirname + '/pk/';
 
 var SHARED_KEY = fs.readFileSync(SECRET_KEYPATH + 'auth_key');
 var SIGNING_KEY = Buffer.from(fs.readFileSync(SECRET_KEYPATH + 'sign_key')).toString();
-SIGNING_KEY = str2buf(SIGNING_KEY, 'hex');
+SIGNING_KEY = str2buf(SIGNING_KEY, 'base64');
 
 // Signee needs to know this public key in order to authenticate the key schedule.
 generateNewKeySchedule(3);
@@ -73,25 +73,32 @@ app.post('/', function(req, res) {
         return;
     }
 
-    var respond_data = {};
-    var assertion = {};
+    var num_entries = Object.keys(data).length;
+    var responses = {};
 
-    from = toDate(data['from']);
-    to = toDate(data['to']);
-    var validity = getValidityRange(from, to);
+    for (var i = 0; i < num_entries; i++) {
+        var assertion = {};
+        var cur_data = data[i];
 
-    assertion['data'] = data['data'];
-    assertion['valid_from'] = validity.from;
-    assertion['valid_until'] = validity.until;
+        from = toDate(cur_data['from']);
+        to = toDate(cur_data['to']);
+        var validity = getValidityRange(from, to);
 
-    var signature = signRequest(assertion);
+        assertion['data'] = cur_data['data'];
+        assertion['valid_from'] = validity.from;
+        assertion['valid_until'] = validity.until;
 
-    respond_data['id'] = data['id'];
-    respond_data['assertion'] = assertion;
-    respond_data['signature'] = signature;
+        var signature = signRequest(assertion);  
+
+        responses[i] = {};
+        responses[i]['id'] = cur_data['id'];
+        responses[i]['assertion'] = assertion;
+        responses[i]['signature'] = signature;  
+    }
+
 
     // send back response to the ajax success function which will then generate the qr code.
-    res.json(respond_data);
+    res.json(responses);
 });
 
 server.listen(3000);

@@ -151,12 +151,15 @@ server.listen(3000);
 function requestHandler(data) {
 
     var data_to_send = {};
+    requests = {};
 
     for (var i = 0; i < data.length; i++) {
-        data_to_send['data' + i] = data[i];
+        requests[i] = data[i];
     }
+    data_to_send['data'] = requests;
+
     console.time('auth_token_generation_time');
-    data_to_send['auth'] = generateAuthToken(JSON.stringify(data_to_send));
+    data_to_send['auth'] = generateAuthToken(JSON.stringify(requests));
     console.timeEnd('auth_token_generation_time');
 
 
