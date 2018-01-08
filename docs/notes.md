@@ -11,4 +11,16 @@ Libraries:
 
 # Pay attention
 
-* fs.read*() returns a buffer and not a string!
+fs.read() returns a buffer and not a string
+
+
+
+# Formal Verification
+
+## establish offline key
+
+* init initialization by pressing a button
+* quorum of administrators scans a qr-code initializing key generation
+* system generates new key pair
+* stores public key
+* displays private key as qr-code and deletes it locally

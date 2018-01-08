@@ -6,6 +6,8 @@
 *.out
 *.gz
 *.synctexx
+*.thm
+*.toc
 
 # ignore the literature folder
 literature/*

@@ -1,0 +1,13 @@
+\chapter{Environment}\label{chapter:environment}
+In this chapter we want to describe the environment in which the system will be placed. This includes assumptions about the location like the building and the server room and also the attacker model and his capabilities.
+
+\section{Location}\label{sec:location}
+As we have seen in \autoref{chapter:system}, the system will be mainly used in the control-plane PKI of the new SCION architecture \cite{scion_book}. Since the control-plane is a very security critical environment, the system will be placed in the server rooms of the core ASes. Thereby, we assume and strongly rely on the fact that those infrastructures and buildings are secured accordingly, i.e., they are using \emph{and} enforcing physical security measurements like secured entrance to the site, security guards controlling the terrain, surveillance cameras with operators 24/7 monitoring them and restricted areas where only authorised people have access to. Furthermore, every employee needs to have an own security code and every access to a room needs to be logged.
+
+All those measurements are necessary to hinder unauthorised people like an attacker to access the site and getting access to the system (see \autoref{sec:attacker}).
+
+\section{Attacker Model}\label{sec:attacker}
+In this section we want to describe the attacker's goal. The goal of the attacker is to get something signed by the Signer that is not supposed to be signed. %TODO: give examples
+He can achieve this using several approaches. For example an attacker could gain access to the signing key of the Signer by tricking the Signee to send some malicious code to the Signer who reveals the signing key. Another approach would be to inject a piece of paper containing a QR-code with the information encoded that he wants to have signed. However, the last point needs physical presence in the room where the system is located, which could be achieved by either breaking into the building or by manipulating or compromising an administrator who could extract the signing key from the Signer.
+
+We further assume that the attacker can not break cryptographic primitives like symmetric or asymmetric encryption as well as cryptographic hash functions. Moreover, we assume that the libraries and modules we used \cite{tweetnacl, jqueryqrcode, instascan} are not vulnerable in any way.

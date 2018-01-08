@@ -276,7 +276,7 @@ function generateNewKeySchedule(number_of_keys=10) {
         start_date = new Date(start_date.setTime(start_date.getTime() + 2 * 60000));
     }
 
-    last_end_date = valid.until;
+    last_end_date = new Date(validity.until);
 
     // schedule job for creating next key schedule
     var new_job = scheduler.scheduleJob((new Date(validity.until)).getTime() - 40000, () => {
