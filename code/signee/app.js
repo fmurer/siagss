@@ -6,6 +6,7 @@ var crypto = require('crypto');
 var fs = require('fs');
 var scheduler = require('node-schedule');
 var { exec } = require('child_process');
+var ArgumentParser = require('argparse').ArgumentParser;
 
 var app = express();
 var server = require('http').createServer(app);
@@ -17,12 +18,38 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
 
+var parser = new ArgumentParser({
+    version: 'Signee: 1.0.0',
+    addHelp: true,
+    description: 'Signee'
+});
 
-/*
-    Handling Schedule
-*/
+parser.addArgument(
+    [ '-n', '--num-requests' ],
+    {
+        help: 'The number of requests handled at once'
+    }
+);
 
-const NUM_REQUESTS = 3;
+parser.addArgument(
+    [ '-p', '--port' ],
+    {
+        help: 'Port number on which the server listens'
+    }
+);
+
+var args = parser.parseArgs();
+
+
+var NUM_REQUESTS = 3;
+if (args.num_requests) {
+    NUM_REQUESTS = args.num_requests;
+}
+var PORT = 3000;
+if (args.port) {
+    PORT = args.port;
+}
+
 const SHARED_KEY_PATH = __dirname + '/sk/';
 const PUBLIC_KEYPATH = __dirname + '/pk/';
 
@@ -30,13 +57,11 @@ var SHARED_KEY = fs.readFileSync(SHARED_KEY_PATH + 'auth_key');
 var PUBLIC_KEY = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'signer.pub')).toString();
 PUBLIC_KEY = str2buf(PUBLIC_KEY, 'base64');
 
-
 var hmac;
 
 /*
     Socket IO stuff
 */
-
 const callbacks = new Map();
 
 io.on('connection', function(client) {
@@ -47,14 +72,36 @@ io.on('connection', function(client) {
 
     client.on('answer', (data) => {
 
-        var num_entries = Object.keys(data).length;
+        if (data.error) {
+            var ids = data.ids;
+            var num_ids = Object.keys(ids).length;
 
-        for (var i = 0; i < num_entries; i++) {
-            const cb = callbacks.get(data[i].id);
-            if (cb) {
-                cb(data[i]);
-                callbacks.delete(data[i].id);
-            }    
+            for (var i = 0; i < num_ids; i++) {
+                const cb = callbacks.get(ids[i]);
+                if (cb) {
+                    error = {}
+                    error['error'] = data.error;
+                    cb(error);
+                    callbacks.delete(ids[i]);
+                }
+            }
+        } else {
+
+            if (!verifyAuth(data.data, data.auth)) {
+                // TODO:
+                console.log("[!!!] ERROR: Verification failed!");
+            } else {
+                var data = data.data;
+                var num_entries = Object.keys(data).length;
+
+                for (var i = 0; i < num_entries; i++) {
+                    const cb = callbacks.get(data[i].id);
+                    if (cb) {
+                        cb(data[i]);
+                        callbacks.delete(data[i].id);
+                    }    
+                }
+            }
         }
         
 
@@ -142,7 +189,7 @@ app.post('/', function(request, response) {
 });
 
 server.setTimeout(0);
-server.listen(3000);
+server.listen(PORT);
 
 
 /*

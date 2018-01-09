@@ -9,6 +9,7 @@
   "author": "Fabian Murer",
   "license": "ISC",
   "dependencies": {
+    "argparse": "^1.0.9",
     "express": "^4.16.2",
     "jquery": "^3.2.1",
     "morgan": "^1.9.0",

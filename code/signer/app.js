@@ -6,6 +6,7 @@ var crypto = require('crypto');
 var fs = require('fs');
 var scheduler = require('node-schedule');
 var { exec } = require('child_process');
+var ArgumentParser = require('argparse').ArgumentParser;
 
 var app = express();
 var server = require('http').createServer(app);
@@ -16,9 +17,27 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(logger('dev'));
 
+var parser = new ArgumentParser({
+    version: 'Signer: 1.0.0',
+    addHelp: true,
+    description: 'Signer'
+});
 
+parser.addArgument(
+    [ '-p', '--port' ],
+    {
+        help: 'Port number on which the server listens'
+    }
+);
+
+var args = parser.parseArgs();
 
 var last_end_date;
+
+var PORT = 3000;
+if (args.port) {
+    PORT = args.port;
+}
 
 const SECRET_KEYPATH = __dirname + '/sk/';
 const PUBLIC_KEYPATH = __dirname + '/pk/';
@@ -65,15 +84,23 @@ app.post('/', function(req, res) {
     var data = incoming_request.data;
     var auth = incoming_request.auth;
 
+    var num_entries = Object.keys(data).length;
+
     // check if the data is correct, i.e. not altered and coming from the signee
     if (!verifyAuth(JSON.stringify(data), auth)) {
         var error = {};
+        var ids = {};
+        
+        for (var i = 0; i < num_entries; i++) {
+            ids[i] = data[i]['id'];
+        }
+
         error['error'] = 'There has been an error! The authentication token could not be verified';
+        error['ids'] = ids;
         res.json(error);
         return;
     }
 
-    var num_entries = Object.keys(data).length;
     var responses = {};
 
     for (var i = 0; i < num_entries; i++) {
@@ -96,12 +123,15 @@ app.post('/', function(req, res) {
         responses[i]['signature'] = signature;  
     }
 
-
+    var response = {};
+    response['data'] = responses;
+    response['auth'] = generateAuthToken(JSON.stringify(responses));
+    
     // send back response to the ajax success function which will then generate the qr code.
-    res.json(responses);
+    res.json(response);
 });
 
-server.listen(3000);
+server.listen(PORT);
 
 
 /*
