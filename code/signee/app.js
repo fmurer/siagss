@@ -41,7 +41,7 @@ parser.addArgument(
 var args = parser.parseArgs();
 
 
-var NUM_REQUESTS = 3;
+var NUM_REQUESTS = 2;
 if (args.num_requests) {
     NUM_REQUESTS = args.num_requests;
 }
@@ -404,7 +404,7 @@ function getNextPubKey() {
         next_key = new_line[2];
 
         // delete current key from key schedule
-        exec("sed -i '/" + next_key + "/d' " + PUBLIC_KEYPATH + 'pk_schedule', (err, stdout, stderr) => {
+        exec("sed -i '/" + next_key.split('\/').join('\\\/') + "/d' " + PUBLIC_KEYPATH + 'pk_schedule', (err, stdout, stderr) => {
             if (err) {
                 console.log(stderr);
             }

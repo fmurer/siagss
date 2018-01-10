@@ -352,7 +352,7 @@ function getNextSignKey() {
         next_key = new_line[2];
 
         // delete current key from key schedule
-        exec("sed -i '/" + next_key + "/d' " + SECRET_KEYPATH + 'sk_schedule', (err, stdout, stderr) => {
+        exec("sed -i '/" + next_key.split('\/').join('\\\/') + "/d' " + SECRET_KEYPATH + 'sk_schedule', (err, stdout, stderr) => {
             if (err) {
                 console.log(stderr);
             }
