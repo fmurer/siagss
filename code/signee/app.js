@@ -73,6 +73,7 @@ io.on('connection', function(client) {
     client.on('answer', (data) => {
 
         if (data.error) {
+            // Verification failed on Signer side
             var ids = data.ids;
             var num_ids = Object.keys(ids).length;
 
@@ -86,11 +87,26 @@ io.on('connection', function(client) {
                 }
             }
         } else {
+            // Verification successful on Signer side
 
-            if (!verifyAuth(data.data, data.auth)) {
-                // TODO:
+            if (!verifyAuth(JSON.stringify(data.data), data.auth)) {
+                // Local Verification failed -> requeue the requests
                 console.log("[!!!] ERROR: Verification failed!");
+                var data = data.data;
+                var num_entries = Object.keys(data).length;
+
+                for (var i = 0; i < num_entries; i++) {
+                    const cb = callbacks.get(data[i].id);
+                    if (cb) {
+                        error = {}
+                        error['error'] = "Verification failed!";
+                        cb(error);
+                        callbacks.delete(data[i].id);
+                    }
+                }
+
             } else {
+                // Local Verification successful
                 var data = data.data;
                 var num_entries = Object.keys(data).length;
 
