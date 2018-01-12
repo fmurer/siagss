@@ -46,6 +46,11 @@ var SHARED_KEY = fs.readFileSync(SECRET_KEYPATH + 'auth_key');
 var SIGNING_KEY = Buffer.from(fs.readFileSync(SECRET_KEYPATH + 'sign_key')).toString();
 SIGNING_KEY = str2buf(SIGNING_KEY, 'base64');
 
+const LOG_FILE = __dirname + '/logs/signer.log'
+const LOG_HASH = __dirname + '/logs/signer_log.hash'
+
+crypt_log("[+++] Server Startup");
+
 // Signee needs to know this public key in order to authenticate the key schedule.
 generateNewKeySchedule(3);
 
@@ -60,6 +65,8 @@ app.get('/', function(req, res, next) {
 app.post('/', function(req, res) {
 
     incoming_request = JSON.parse(req.body.qrcode);
+
+    crypt_log("[+++] Received Request: " + req.body.qrcode);
 
     if (incoming_request.signee_key) {
         pairSystems(req, res);
@@ -88,6 +95,9 @@ app.post('/', function(req, res) {
 
     // check if the data is correct, i.e. not altered and coming from the signee
     if (!verifyAuth(JSON.stringify(data), auth)) {
+
+        crypt_log("[!!!] Verification of incoming request failed!");
+
         var error = {};
         var ids = {};
         
@@ -127,6 +137,8 @@ app.post('/', function(req, res) {
     response['data'] = responses;
     response['auth'] = generateAuthToken(JSON.stringify(responses));
     
+    crypt_log("[+++] Return response: " + JSON.stringify(response));
+
     // send back response to the ajax success function which will then generate the qr code.
     res.json(response);
 });
@@ -145,6 +157,7 @@ server.listen(PORT);
 function pairSystems(req, res) {
 
     console.log("PAIRING");
+    crypt_log("[+++] Start Pairing");
 
     var data = JSON.parse(req.body.qrcode);
 
@@ -152,6 +165,8 @@ function pairSystems(req, res) {
         if (!verifyAuth(data.signee_key, data.auth)) {
             console.log("[!!!] ERROR: Pairing failed due to incorrect authentication!");
             console.log("[!!!] --> Keep old shared key");
+
+            crypt_log("[!!!] ERROR: Pairing failed due to incorrect authentication!");
             return;
         }
     }
@@ -170,8 +185,16 @@ function pairSystems(req, res) {
 
     SHARED_KEY = shared_key
     console.log(SHARED_KEY);
+
+    crypt_log("[+++] Computed new shared key.");
+
     fs.writeFileSync(SECRET_KEYPATH + 'auth_key', SHARED_KEY);
+
+    crypt_log("[+++] Wrote new key to file: " + SECRET_KEYPATH + 'auth_key');
+
     res.json(dh_exchange);
+
+    crypt_log("[+++] Sent response back: " + JSON.stringify(dh_exchange));
 }
 
 /*
@@ -185,6 +208,9 @@ function signRequest(data) {
     var signature = curve.sign.detached(json2buf(data, encoding='ascii'), SIGNING_KEY);
     signature = Buffer.from(signature).toString('base64');
     console.timeEnd('signing_time');
+
+    crypt_log("[+++] Signed Request. Signature: " + signature);
+
     return signature;
 }
 
@@ -195,7 +221,11 @@ function signRequest(data) {
 function generateAuthToken(msg) {
     hmac = crypto.createHmac('sha256', SHARED_KEY);
     hmac.update(msg);
-    return hmac.digest('base64');
+    var token = hmac.digest('base64');
+
+    crypt_log("[+++] Generated authentication token: " + token);
+
+    return token;
 }
 
 /*
@@ -263,6 +293,8 @@ function generateKeyPair() {
     curve.sign.seedLength = 32;
     curve.sign.signatureLength = 64;
     
+    crypt_log("[+++] Generated new key pair.");
+
     return curve.sign.keyPair();
 }
 
@@ -307,6 +339,10 @@ function generateNewKeySchedule(number_of_keys=10) {
     var new_job = scheduler.scheduleJob((new Date(validity.until)).getTime() - 40000, () => {
         generateNewKeySchedule(3);
     });
+
+    crypt_log("[+++] Generated new Key Schedule");
+    crypt_log("[+++] Public Key Schedule written to: " + PUBLIC_KEYPATH + 'pk_schedule');
+    crypt_log("[+++] Private Key Schedule written to: " + SECRET_KEYPATH + 'sk_schedule');
 }
 
 function sendCurrentKeySchedule() {
@@ -336,6 +372,7 @@ function sendCurrentKeySchedule() {
 
     io.sockets.emit('update_img', key_schedule);    
 
+    crypt_log("[+++] Sent current Key Schedule");
 }
 
 function getNextSignKey() {
@@ -362,8 +399,11 @@ function getNextSignKey() {
         SIGNING_KEY = str2buf(next_key, 'base64');
 
         console.log("[***] NEW SIGNING KEY: ", Buffer.from(SIGNING_KEY).toString('base64'));
+
+        crypt_log("[+++] Set new SIGNING KEY from key schedule");
     } else {
         console.log("[***] No keys in the key schedule. Keep old PUBLIC KEY!");
+        crypt_log("[!!!] No keys in the key schedule. Keep old SIGNING KEY!");
     }
     
 }
@@ -408,4 +448,21 @@ function timeDifference(date1, date2, type) {
         default:
             return Math.ceil(timeDiff / (1000 * 3600 * 24));
     }
+}
+
+function crypt_log(content) {
+    var date = new Date();
+    fs.appendFileSync(LOG_FILE, date.toString() + ":    " + content + '\n');
+
+    try{
+        var old_hash = Buffer.from(fs.readFileSync(LOG_HASH)).toString();    
+    } catch (e) {
+        var old_hash = "";
+    }
+    
+    var agr_hash = crypto.createHash('sha256')
+    agr_hash.update(old_hash + content);
+    var new_hash = agr_hash.digest('hex');
+
+    fs.writeFileSync(LOG_HASH, new_hash);
 }
