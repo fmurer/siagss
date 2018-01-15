@@ -8,7 +8,10 @@
 *.synctexx
 *.thm
 *.toc
+*.dvi
+*.ps
 
+.texpadtmp/
 # ignore the literature folder
 literature/*
 
