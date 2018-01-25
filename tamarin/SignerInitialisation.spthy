@@ -1,0 +1,122 @@
+/*
+ *  Author: Fabian Murer
+ *  Model Name: SignerInitialisation.spthy
+ *  Status: DEVELOPMENTAL
+ *
+ *  Comments:
+ */
+
+theory SignerInitialisation
+begin
+
+builtins: signing, hashing
+
+// Public key infrastructure
+
+rule Register:
+    [ Fr(~sk) ] 
+  --> 
+    [ !SecretKey($A, ~sk), !PublicKey($A, pk(~sk)), Out(pk(~sk)) ]
+
+rule Reveal:
+    [ !SecretKey(A, ltk) ]
+  --[ Reveal(A) ]->
+    [ Out(ltk) ]
+
+rule Init_Config:
+	[ Fr(~N), Fr(~t)]
+  -->
+  	[ !Config(~N, ~t) ]
+
+
+// Initialisation
+
+rule Init_Signer:
+	[ Fr(~id), !SecretKey($TPM, skTPM) ]
+  --[ Create($S, ~id, 'Signer') ]->
+	[ St_S_1($S, ~id, skTPM) ]
+
+rule Init_Verifier:
+	[ Fr(~id), !SecretKey($V, skV), !PublicKey($TPM, pkTPM), !Config(N, t) ]
+  --[ Create($V, ~id, 'Verifier'), TPM($V, pkTPM), ConfigFile(N, t), Verifier($V, pk(skV)) ]->
+	[ St_V_1($V, ~id, skV, pkTPM, <N, t>) ]
+
+
+
+// Protocol
+
+rule Verifier_Send_1:
+	[ St_V_1($V, ~id, skV, pkTPM, <N, t>) ]
+  --[ Send($V, <pk(skV), <N, t>>) ]->
+  	[ St_V_2($V, ~id, skV, pkTPM, <N, t>), Out(<pk(skV), <N, t>>) ]
+
+rule Signer_Receive_1:
+	[ St_S_1($S, ~id, skTPM), In(<pkV, <N, t>>) ]
+  --[ Recv($S, <pkV, <N, t>>) ]->
+  	[ St_S_1($S, ~id, skTPM), GetInit_i(pkV, N, t) ]
+
+
+rule Signer_CHECK:
+	[ St_S_1($S, ~id, skTPM), GetInit_i(pkV_1, N, t), GetInit_i(pkV_2, N, t), GetInit_i(pkV_3, N, t) ]
+  --[ AllDifferent(pkV_1, pkV_2, pkV_3) ]->
+  	[ St_S_2($S, ~id, skTPM, <pkV_1, pkV_2, pkV_3>, <N, t>) ]
+
+
+rule Signer_OK:
+	[ St_S_2($S, ~id, skTPM, <pkV_1, pkV_2, pkV_3>, <N, t>) ]
+  --[ Send($S, 'ok') ]->
+  	[ St_S_3($S, ~id, skTPM, <pkV_1, pkV_2, pkV_3>, <N, t>), Out('ok') ]
+
+rule Verifier_Receive_OK:
+	[ St_V_2($V, ~id, skV, pkTPM, <N, t>), In('ok') ]
+  --[ Recv($V, 'ok') ]->
+  	[ St_V_3($V, ~id, skV, pkTPM, <N, t>) ]
+
+
+rule Verifier_Send_Nonce:
+	[ St_V_3($V, ~id, skV, pkTPM, <N, t>), Fr(~nonce) ]
+  --[ Send($V, ~nonce) ]->
+  	[ St_V_4($V, ~id, skV, pkTPM, <N, t>, ~nonce), Out(~nonce) ]
+
+rule Signer_Receive_Nonce:
+	[ St_S_3($S, ~id, skTPM, <pkV_1, pkV_2, pkV_3>, <N, t>), In(n_i) ]
+  --[ Recv($S, n_i) ]->
+  	[ St_S_3($S, ~id, skTPM, <pkV_1, pkV_2, pkV_3>, <N, t>), Nonce(n_i) ]
+
+
+rule Signer_Send_Final:
+	[ St_S_3($S, ~id, skTPM, <pkV_1, pkV_2, pkV_3>, <N, t>), Nonce(n1), Nonce(n2), Nonce(n3), !SecretKey($S, skS), Fr(~i) ]
+  --[ Send($S, <~i, <pkV_1, pkV_2, pkV_3>, pk(skS), sign{n_i, h(<pk(skS), <pkV_1, pkV_2, pkV_3>, <N, t>>)}skTPM>), GenKey(pk(skS)) ]->
+  	[ St_S_4($S, ~id, skTPM, <pkV_1, pkV_2, pkV_3>, <N, t>, skS), Out(<~i, <pkV_1, pkV_2, pkV_3>, pk(skS), sign{n_i, h(<pk(skS), <pkV_1, pkV_2, pkV_3>, <N, t>>)}skTPM>) ]
+
+rule Verifier_Receive_Final:
+	[ St_V_4($V, ~id, skV, pkTPM, <N, t>, nonce), In(<i, <pkV_1, pkV_2, pkV_3>, pkS, sign{nonce, h(<pkS, <pkV_1, pkV_2, pkV_3>, <N, t>>)}skTPM>) ]
+  --[ Recv($V, <i, <pkV_1, pkV_2, pkV_3>, pkS, sign{nonce, h(<pkS, <pkV_1, pkV_2, pkV_3>, <N, t>>)}skTPM>), Finish(pkV_1, pkV_2, pkV_3, pkS) ]->
+  	[ St_V_5($V, ~id, skV, pkTPM, <N, t>, nonce, i, <pkV_1, pkV_2, pkV_3>, pkS) ]
+
+
+// Security Properties
+
+lemma executeability:
+	exists-trace
+		//"Ex N t #i #j. ConfigFile(N, t)@i & Finish(N, t)@j"
+		//"Ex pkS #i #j. GenKey(pkS)@i &Finish(pkS)@j"
+		"Ex V1 V2 V3 pk1 pk2 pk3 pkS #s #i #j #k #f.  GenKey(pkS)@s &
+													  Verifier(V1, pk1)@i &
+													  Verifier(V2, pk2)@j &
+											  		  Verifier(V3, pk3)@k &
+													  not(pk1 = pk2 | pk1 = pk3 | pk2 = pk3) &
+													  not(#i = #j | #i = #k | #j = #k) &
+													  Finish(pk1, pk2, pk3, pkS)@f"
+
+restriction all_different:
+	" All p1 p2 p3 #i. AllDifferent(p1, p2, p3)@i ==> not(p1 = p2 | p1 = p3 | p2 = p3) "
+
+restriction same_tpm:
+ 	" All V1 V2 tpm1 tpm2 #i #j. TPM(V1, tpm1)@i & TPM(V2, tpm2)@j & not(#i = #j) ==> tpm1 = tpm2 & not(V1 = V2)"
+
+restriction only_one_signer:
+	" All S1 S2 id1 id2 #i #j. Create(S1, id1, 'Signer')@i& Create(S2, id2, 'Signer')@j ==> #i = #j "
+
+
+end

@@ -1,0 +1,91 @@
+/*
+ *  Author: Fabian Murer
+ *  Model Name: 
+ *  Status: DEVELOPMENTAL
+ *
+ *  Comments: This protocol is used for log verification
+
+ 	S  <-  V 	: Sign(h, n)
+ 	S  ->  V 	: Sign(L, h_l, n)
+ */
+
+theory LogVerification
+begin
+
+builtins: signing
+
+
+// Public key infrastructure
+
+rule Register:
+    [ Fr(~sk) ] 
+  --> 
+    [ !SecretKey($A, ~sk), !PublicKey($A, pk(~sk)), Out(pk(~sk)) ]
+
+rule Reveal:
+    [ !SecretKey(A, ltk) ]
+  --[ Reveal(A) ]->
+    [ Out(ltk) ]
+
+
+// Initialisation
+
+rule Init_Signer:
+	[ Fr(~id), !SecretKey($S, skS), !PublicKey($V, pkV) ]
+	--[ Create($S, ~id, 'roleS') ]->
+	[ St_S_1($S, ~id, $V, skS, pkV) ]
+
+rule Init_Verifier:
+	[ Fr(~id), !SecretKey($V, skV), !PublicKey($S, pkS) ]
+	--[ Create($V, ~id, 'roleV') ]->
+	[ St_V_1($V, ~id, $S, skV, pkS) ]
+
+
+// Protocol
+
+rule V_1_Send:
+	[ St_V_1($V, ~id, $S, skV, pkS), Fr(~nonce), Fr(~hash) ]
+	--[ Send($V, sign{~hash, ~nonce}skV) ]->
+	[ St_V_2($V, ~id, $S, skV, pkS, ~nonce, ~hash), Out(sign{~hash, ~nonce}skV) ]
+
+rule S_1_Receive:
+	[ St_S_1($S, ~id, $V, skS, pk(skV)), In(sign{hash, n}skV) ]
+	--[ Recv($V, sign{hash, n}skV) ]->
+	[ St_S_2($S, ~id, $V, skS, pk(skV), hash, n) ]
+
+
+rule S_2_Send:
+	[ St_S_2($S, ~id, $V, skS, pk(skV), hash, n), Fr(~L), Fr(~h_new) ]
+	--[ Send($S, sign{~L, ~h_new, n}skS), Running($S, $V, <'I', 'R', <~L, ~h_new, n>>) ]->
+	[ St_S_3($S, ~id, $V, skS, pk(skV), hash, n, ~L), Out(sign{~L, ~h_new, n}skS) ]
+
+rule V_2_Receive:
+	[ St_V_2($V, ~id, $S, skV, pk(skS), nonce, hash), In(sign{log, new_hash, nonce}skS) ]
+	--[ Recv($S, sign{log, new_hash, nonce}skS), Commit($V, $S, <'I', 'R', <log, new_hash, nonce>>), Honest($S), Honest($V), Finish($V) ]->
+	[ St_V_3($V, ~id, $S, skV, pk(skS), nonce, hash, log, new_hash) ]
+
+
+
+// Security Properties
+
+lemma executeability:
+	exists-trace
+		"Ex A #i. Finish(A)@i"
+
+lemma noninjectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j)
+        | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+lemma injectiveagreementINITIATOR:
+  "All a b t #i. 
+    Commit(a,b,<'I','R',t>) @i
+    ==> (Ex #j. Running(b,a,<'I','R',t>) @j 
+        & j < i
+        & not (Ex a2 b2 #i2. Commit(a2,b2,<'I','R',t>) @i2
+                           & not (#i2 = #i)))
+              | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
+
+
+end
