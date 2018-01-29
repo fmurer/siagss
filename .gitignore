@@ -14,6 +14,7 @@
 .texpadtmp/
 # ignore the literature folder
 literature/*
+docs/*
 
 # ignore the shared key folder
 sk/

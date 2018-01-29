@@ -1,0 +1,148 @@
+/*
+ *  Author: Fabian Murer
+ *  Model Name: System.spthy
+ *  Status: DEVELOPMENTAL
+ *
+ *  Comments:
+ */
+
+theory System
+begin
+
+builtins: signing, hashing, symmetric-encryption
+
+// Public key infrastructure
+
+rule Register_PKI:
+    [ Fr(~sk) ]
+  -->
+    [ !SecretKey($A, ~sk), !PublicKey($A, pk(~sk)), Out(pk(~sk)) ]
+
+rule Reveal:
+    [ !SecretKey(A, sk) ]
+  --[ Reveal(A) ]->
+    [ Out(sk) ]
+
+rule Register_Shared:
+    [ Fr(~shk) ]
+  -->
+    [ !SharedKey($A, $B, ~shk) ]
+
+
+// Initialisation
+
+rule Init_Signer:
+    [ Fr(~id), !SecretKey($S, skS), !SharedKey($S, $V, shared) ]
+  --[ Create($S, ~id, 'Signer') ]->
+    [ St_S_1($S, ~id, $V, skS, shared) ]
+
+rule Init_Signee:
+    [ Fr(~id), !PublicKey($S, pkS), !SharedKey($S, $V, shared) ]
+  --[ Create($V, ~id, 'Signee') ]->
+    [ St_V_1($V, ~id, $S, pkS, shared) ]
+
+rule Init_Network:
+    [ Fr(~id), !PublicKey($S, pkS) ]
+  --[ Create($N, ~id, 'Network') ]->
+    [ St_N_1($N, ~id, $V, pkS) ]
+
+
+// Protocol
+
+rule Network_Send_1:
+  let
+  	request = <~data, ~from, ~to>
+  in
+    [ St_N_1($N, ~id, $V, pkS), Fr(~data), Fr(~from), Fr(~to) ]
+  --[ Send($V, request) ]->
+    [ St_N_2($N, ~id, $V, pkS, request), Out(request) ]
+
+
+rule Signee_Receive_1:
+  let
+  	request = <data, from, to>
+  in
+    [ St_V_1($V, ~id, $S, pkS, shared), In(request) ]
+  --[ Recv($N, request) ]->
+    [ St_V_2($V, ~id, $S, pkS, shared), Request(request) ]
+
+
+rule Signee_Prepare_1:
+  let
+  	idn = h(request)
+  	mac = senc(<idn, request>, shared)
+  in
+    [ St_V_2($V, ~id, $S, pkS, shared), Request(request) ]
+  --[ Send($S, <mac, idn, request>) ]->
+    [ St_V_3($V, ~id, $S, pkS, shared, idn, request), Out(<mac, idn, request>) ]
+
+
+rule Signer_Receive_1:
+  let
+  	data = <tosign, from, to>
+  	request = <senc(<idn, data>, shared), idn_free, data_free>
+  in
+    [ St_S_1($S, ~id, $V, skS, shared), In(request) ]
+  --[ Recv($V, request), Equal(idn, idn_free), Equal(data, data_free) ]->
+    [ St_S_2($S, ~id, $V, skS, shared), ToSign(request) ]
+
+
+rule Signer_Send_1:
+  let
+  	data = <tosign, from, to>
+  	request = <senc(<idn, data>, shared), idn, data>
+  	answer = <idn, data, sign{data}skS>
+  in
+    [ St_S_2($S, ~id, $V, skS, shared), ToSign(request) ]
+  --[ Send($V, answer) ]->
+    [ St_S_3($S, ~id, $V, skS, shared), Out(answer) ]
+
+
+rule Signee_Receive_2:
+  let
+  	signature = sign{data_new}skS
+  	response = <idn_new, data_new, signature>
+  in
+    [ St_V_3($V, ~id, $S, pkS, shared, idn, request), In(response) ]
+  --[ Recv($S, response), Equal(idn, idn_new), Equal(request, data_new), Verify(signature, request, pkS) ]->
+    [ St_V_4($V, ~id, $S, pkS, shared, idn, request), Response(<data_new, signature>) ]
+
+
+rule Signee_Send_2:
+  let
+  	signature = sign{data}skS
+  	response = <data, signature>
+  in
+    [ St_V_4($V, ~id, $S, pkS, shared, idn, request), Response(response) ]
+  --[ Send($N, response) ]->
+    [ St_V_5($V, ~id, $S, pkS, shared, idn, request), Out(response) ]
+
+
+rule Network_Receive_2:
+  let
+  	signature = sign{data}skS
+  	answer = <data, signature>
+  in
+    [ St_N_2($N, ~id, $V, pk(skS), request), In(answer) ]
+  --[ Recv($V, answer), Equal(request, data), Finish() ]->
+    [ St_N_3($N, ~id, $V, pk(skS), request, signature) ]
+
+
+lemma exists:
+  exists-trace
+  "Ex #i. Finish()@i"
+
+
+restriction Verify:
+  "All s d k #i. Verify(s, d, k)@i ==> verify(s, d, k) = true"
+
+restriction Equal:
+   "All x y #i. Equal(x, y)@i ==> x = y" 
+
+restriction OnlyOneSigner:
+	"All S1 S2 id1 id2 #i #j. Create(S1, id1, 'Signer')@i & Create(S2, id2, 'Signer')@j ==> #i = #j"
+
+restriction OnlyOneSignee:
+	"All S1 S2 id1 id2 #i #j. Create(S1, id1, 'Signee')@i & Create(S2, id2, 'Signee')@j ==> #i = #j"
+	
+end

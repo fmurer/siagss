@@ -1,0 +1,108 @@
+/*
+ *  Author: Fabian Murer
+ *  Model Name: 
+ *  Status: DEVELOPMENTAL
+ *
+ *  Comments:
+ */
+
+theory KeyReplication
+begin
+
+builtins: asymmetric-encryption, signing
+
+// Public key infrastructure
+
+rule Register:
+    [ Fr(~sk) ] 
+  --> 
+    [ !SecretKey($A, ~sk), !PublicKey($A, pk(~sk)), Out(pk(~sk)) ]
+
+rule Reveal:
+    [ !SecretKey(A, ltk) ]
+  --[ Reveal(A) ]->
+    [ Out(ltk) ]
+
+
+// Initialisation
+
+rule Init_Signer:
+	[ Fr(~id), !SecretKey($S, skS), !PublicKey($V1, pkV_1), !PublicKey($V2, pkV_2), !PublicKey($V3, pkV_3) ]
+	--[ Create($S, ~id, 'Signer'), Public_Verifyer($S, <pkV_1, pkV_2, pkV_3>) ]->
+	[ St_S_1($S, ~id, $V, skS, <pkV_1, pkV_2, pkV_3>) ]
+
+rule Init_Verifier:
+	[ Fr(~id), !SecretKey($V, skV), !PublicKey($S, pkS), !PublicKey($B, pkB) ]
+	--[ Create($V, ~id, 'Verifier') ]->
+	[ St_V_1($V, ~id, $S, $B, skV, pkS, pkB) ]
+
+rule Init_Backup:
+	[ Fr(~id), !SecretKey($B, skB), !PublicKey($V1, pkV_1), !PublicKey($V2, pkV_2), !PublicKey($V3, pkV_3) ]
+	--[ Create($B, ~id, 'Backup'), Public_Verifyer($B, <pkV_1, pkV_2, pkV_3>) ]->
+	[ St_B_1($B, ~id, $V, skB, <pkV_1, pkV_2, pkV_3>) ]
+
+
+// Protocol
+
+rule V_1_Send:
+	[ St_V_1($V, id, $S, $B, skV, pkS, pkB) ]
+	--[ Send($V, sign{pkB, id }skV) ]->
+	[ St_V_2($V, id, $S, $B, skV, pkS, pkB), Out(sign{pkB, id}skV) ]
+
+rule S_1_Receive:
+	[ St_S_1($S, id, $V, skS, <pkV_1, pkV_2, pkV_3>), In(sign{pkB, id_v}skV) ]
+	--[ Recv($V, sign{pkB, id_v}skV) ]->
+	[ St_S_1($S, id, $V, skS, <pkV_1, pkV_2, pkV_3>), Init(pkB, id_v) ]
+
+
+rule S_2_Send:
+	[ St_S_1($S, id, $V, skS, <pkV_1, pkV_2, pkV_3>), Init(pkB, id1), Init(pkB, id2) ]
+	--[ Send($S, sign{aenc(skS, pkB)}skS), Diff(id1, id2) ]->
+	[ St_S_2($S, id, $V, skS, <pkV_1, pkV_2, pkV_3>, pkB), Out(sign{aenc(skS, pkB)}skS) ]
+
+rule V_2_Receive:
+	[ St_V_2($V, id, $S, $B, skV, pk(skS), pk(skB)), In(sign{m}skS) ]
+	--[ Recv($S, sign{m}skS) ]->
+	[ St_V_3($V, id, $S, $B, skV, pk(skS), pk(skB), m) ]
+
+
+rule V_3_Send:
+	[ St_V_3($V, id, $S, $B, skV, pk(skS), pk(skB), m) ]
+	--[ Send($V, sign{m}skV) ]->
+	[ St_V_4($V, id, $S, $B, skV, pk(skS), pk(skB), m), Out(sign{m}skV) ]
+
+rule B_3_Receive:
+	[ St_B_1($B, id, $V, skB, <pkV_1, pkV_2, pkV_3>), In(sign{aenc(skS, pk(skB))}skV) ]
+	--[ Recv($V, sign{aenc(skS, pk(skB))}skV) ]->
+	[ St_B_1($B, id, $V, skB, <pkV_1, pkV_2, pkV_3>), KeyBackup(skS, skV) ]
+
+
+rule B_Store:
+	[ St_B_1($B, id, $V, skB, <pkV_1, pkV_2, pkV_3>), KeyBackup(skS, skV_1), KeyBackup(skS, skV_2) ]
+  --[ Diff(skV_1, skV_2), Finish($B) ]->
+  	[ St_B_2($B, id, $V, skB, <pkV_1, pkV_2, pkV_3>, skS) ]
+
+// Security Properties
+
+lemma executeability:
+	exists-trace
+		"Ex B #i. Finish(B)@i"
+
+lemma secrecy:
+  "All A x #i. 
+    Secret(A,x) @i ==> 
+    not (Ex #j. K(x)@j)
+        | (Ex X #r. Reveal(X)@r)"
+
+restriction same_public_keys:
+	"All X Y pk11 pk12 pk13 pk21 pk22 pk23 #i #j. Public_Verifyer(X, <pk11, pk12, pk13>)@i & 
+												  Public_Verifyer(Y, <pk21, pk22, pk23>)@j & not(#i = #j) 
+												  ==> (pk11 = pk21) & (pk12 = pk22) & (pk13 = pk23)"
+
+restriction same_id:
+	"All x y #i. Equal(x, y)@i ==> x = y"
+
+restriction Diff:
+	"All x y #i. Diff(x, y)@i ==> not(x = y)"
+
+end
