@@ -1,0 +1,151 @@
+/*
+ *  Author: Fabian Murer
+ *  Model Name: SignerInitialisation.spthy
+ *  Status: DEVELOPMENTAL
+ *
+ *  Comments:
+ */
+
+theory SignerInitialisation_2
+begin
+
+builtins: signing, hashing
+
+// Public key infrastructure
+
+rule Register:
+    [ Fr(~sk) ] 
+  --> 
+    [ !SecretKey($A, ~sk), !PublicKey($A, pk(~sk)), Out(pk(~sk)) ]
+
+rule Reveal:
+    [ !SecretKey(A, ltk) ]
+  --[ Reveal(A) ]->
+    [ Out(ltk) ]
+
+rule Init_Config:
+	[ Fr(~N), Fr(~t)]
+  -->
+  	[ !Config(~N, ~t) ]
+
+
+// Initialisation
+
+rule Init_Signer:
+	[ !SecretKey($TPM, skTPM) ]
+  --[ Create($S, 'Signer') ]->
+	[ St_S_1($S, skTPM) ]
+
+rule Init_Verifier:
+	[ !SecretKey($V, skV), !PublicKey($TPM, pkTPM), !Config(N, t) ]
+  --[ Create($V, 'Verifier'), TPM($V, pkTPM) ]->
+	[ St_V_1($V, skV, pkTPM, <N, t>) ]
+
+
+
+// Protocol
+
+rule Verifier_Send_1:
+  let
+  	C = <N, t>
+  	request = <C, pk(skV)>
+  in
+    [ St_V_1($V, skV, pk(skTPM), <N, t>) ]
+  --[ Send($V, request) ]->
+    [ St_V_2($V, skV, pk(skTPM), <N, t>), Init(request) ]
+
+
+rule Signer_Receive_1:
+  let
+  	N = N1
+  	t = t1
+  in
+    [ St_S_1($S, skTPM), Init(<<N1, t1>, pkV1>), Init(<<N2, t2>, pkV2>) ]
+  --[ Equal(N1, N2), Equal(t1, t2), Diff(pkV1, pkV2) ]->
+    [ St_S_2($S, skTPM, <pkV1, pkV2>, <N, t>) ]
+
+
+
+rule Signer_Send_2:
+  let
+  	response = sign{'ok'}skTPM
+  in
+    [ St_S_2($S, skTPM, <pkV1, pkV2>, <N, t>), !SecretKey($S, skS) ]
+  --[ Send($S, response) ]->
+    [ St_S_3($S, skTPM, <pkV1, pkV2>, <N, t>, skS), !OK(response) ]
+
+
+rule Verifier_Receive_OK:
+    [ St_V_2($V, skV, pk(skTPM), <N, t>), !OK(msg) ]
+  --[ Equal(verify(msg, 'ok', pk(skTPM)), true) ]->
+    [ St_V_3($V, skV, pk(skTPM), <N, t>) ]
+
+
+
+rule Verifier_Send_Nonce:
+	let
+		toSend = sign{~nonce}skV
+	in
+    [ St_V_3($V, skV, pk(skTPM), <N, t>), Fr(~nonce) ]
+  --[ Send($V, toSend) ]->
+    [ St_V_4($V, skV, pk(skTPM), <N, t>, ~nonce), Out(toSend) ]
+
+
+rule Signer_Receive_Nonce:
+    [ St_S_3($S, skTPM, <pkV1, pkV2>, <N, t>, skS), In(sign{nonce}pkV) ]
+  --[ Recv($S, nonce), Included(pkV, <pkV1, pkV2>) ]->
+    [ St_S_3($S, skTPM, <pkV1, pkV2>, <N, t>, skS), Answer(nonce) ]
+
+
+rule Signer_Send_Anwer:
+  let
+  	C = <N, t>
+  	lambda = <pkV1, pkV2>
+  	M = h(pk(skS), C, lambda)
+  	signed = sign{nonce, M}skTPM
+  	response = <~id, lambda, pk(skS), signed>
+  in
+    [ St_S_3($S, skTPM, <pkV1, pkV2>, <N, t>, skS), Fr(~id), Answer(nonce) ]
+  --[ Send($S, response) ]->
+    [ St_S_4($S, skTPM, <pkV1, pkV2>, <N, t>, skS), Out(response) ]
+
+
+rule Verifier_Receive_Final:
+  let
+  	C = <N, t>
+  in
+    [ St_V_4($V, skV, pk(skTPM), <N, t>, nonce), In(<id, <pkV1, pkV2>, pkS, sign{nonce, h(pkS, C, <pkV1, pkV2>)}skTPM>) ]
+  --[ Recv($V, <id, <pkV1, pkV2>, pkS, sign{nonce, h(pkS, C, <pkV1, pkV2>)}skTPM>), Included(pk(skV), <pkV1, pkV2>), Finish($V) ]->
+    [ St_V_5($V, skV, pk(skTPM), <N, t>, nonce, id, pkS, <pkV1, pkV2>) ]
+
+
+
+// properties
+
+lemma exists:
+	exists-trace
+  //"Ex #i. Finish()@i"
+  "All V #j. Create(V, 'Verifier')@j ==> Ex #i. Finish(V)@i"
+
+
+// restrictions
+
+restriction Equal:
+  "All x y #i. Equal(x, y)@i ==> x = y"
+
+restriction Diff:
+	" All x y #i. Diff(x, y)@i ==> not(x = y) "
+
+restriction SameTPM:
+ 	" All V1 V2 tpm1 tpm2 #i #j. TPM(V1, tpm1)@i & TPM(V2, tpm2)@j & not(#i = #j) ==> tpm1 = tpm2 & not(V1 = V2)"
+
+restriction OnlyOneSigner:
+	" All S1 S2 id1 id2 #i #j. Create(S1, id1, 'Signer')@i& Create(S2, id2, 'Signer')@j ==> #i = #j "
+
+restriction Included:
+  "All p1 p2 p3 #i. Included(p1, <p2, p3>)@i ==> p1 = p2 | p1 = p3"
+
+restriction ExistenceOfVerifier:
+  "Ex V #i. Create(V, 'Verifier')@i"
+
+end

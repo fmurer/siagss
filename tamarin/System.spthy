@@ -11,138 +11,142 @@ begin
 
 builtins: signing, hashing, symmetric-encryption
 
-// Public key infrastructure
 
+// Key Setup
 rule Register_PKI:
     [ Fr(~sk) ]
   -->
     [ !SecretKey($A, ~sk), !PublicKey($A, pk(~sk)), Out(pk(~sk)) ]
+
+rule Register_Shared:
+    [ Fr(~shared) ]
+  -->
+    [ !SharedKey($A, $B, ~shared) ]
 
 rule Reveal:
     [ !SecretKey(A, sk) ]
   --[ Reveal(A) ]->
     [ Out(sk) ]
 
-rule Register_Shared:
-    [ Fr(~shk) ]
-  -->
-    [ !SharedKey($A, $B, ~shk) ]
 
 
 // Initialisation
 
-rule Init_Signer:
-    [ Fr(~id), !SecretKey($S, skS), !SharedKey($S, $V, shared) ]
-  --[ Create($S, ~id, 'Signer') ]->
-    [ St_S_1($S, ~id, $V, skS, shared) ]
+rule Init_Network:
+    [ !PublicKey($S, pkS) ]
+  --[ Create($N, 'Network'), SignerKey(pkS) ]->
+    [ St_N_1($N, $S, $V, pkS) ]
 
 rule Init_Signee:
-    [ Fr(~id), !PublicKey($S, pkS), !SharedKey($S, $V, shared) ]
-  --[ Create($V, ~id, 'Signee') ]->
-    [ St_V_1($V, ~id, $S, pkS, shared) ]
+    [ !PublicKey($S, pkS), !SharedKey($S, $V, shared) ]
+  --[ Create($V, 'Signee'), SignerKey(pkS) ]->
+    [ St_V_1($V, $S, pkS, shared) ]
 
-rule Init_Network:
-    [ Fr(~id), !PublicKey($S, pkS) ]
-  --[ Create($N, ~id, 'Network') ]->
-    [ St_N_1($N, ~id, $V, pkS) ]
+rule Init_Signer:
+    [ !SecretKey($S, skS), !SharedKey($S, $V, shared) ]
+  --[ CreateSigner($S, skS, 'Signer') ]->
+    [ St_S_1($S, $V, skS, shared) ]
 
 
-// Protocol
+/*
+ *	Protocol
+ *
+ */
+
+
 
 rule Network_Send_1:
   let
   	request = <~data, ~from, ~to>
   in
-    [ St_N_1($N, ~id, $V, pkS), Fr(~data), Fr(~from), Fr(~to) ]
-  --[ Send($V, request) ]->
-    [ St_N_2($N, ~id, $V, pkS, request), Out(request) ]
+    [ St_N_1($N, $S, $V, pk(skS)), Fr(~data), Fr(~from), Fr(~to) ]
+  --[ Send($N, request) ]->
+    [ St_N_2($N, $S, $V, pk(skS), request), RequestFromNet(request) ]
 
 
-rule Signee_Receive_1:
+rule Signee_Send_1:
   let
-  	request = <data, from, to>
+  	assertion = <data, from, to>
+  	id = h(assertion)
+  	mac = senc(<id, assertion>, shared)
   in
-    [ St_V_1($V, ~id, $S, pkS, shared), In(request) ]
-  --[ Recv($N, request) ]->
-    [ St_V_2($V, ~id, $S, pkS, shared), Request(request) ]
+    [ St_V_1($V, $S, pk(skS), shared), RequestFromNet(<data, from, to>) ]
+  --[ Recv($V, <data, from, to>) ]->
+    [ St_V_2($V, $S, pk(skS), shared, id), Out(<id, assertion, mac>) ]
 
 
-rule Signee_Prepare_1:
+rule Signer_Receive_2:
+    [ St_S_1($S, $V, skS, shared), In(<some_id, some_assertion, some_mac>) ]
+  --[ Recv($S, <some_id, some_assertion, some_mac>), Equal(senc(<some_id, some_assertion>, shared), some_mac) ]->
+    [ St_S_2($S, $V, skS, shared), ToSign(some_id, some_assertion) ]
+
+
+rule Signer_Send_3:
   let
-  	idn = h(request)
-  	mac = senc(<idn, request>, shared)
+  	signature = sign{assertion}skS
+  	response = <id, assertion, signature>
   in
-    [ St_V_2($V, ~id, $S, pkS, shared), Request(request) ]
-  --[ Send($S, <mac, idn, request>) ]->
-    [ St_V_3($V, ~id, $S, pkS, shared, idn, request), Out(<mac, idn, request>) ]
+    [ St_S_2($S, $V, skS, shared), ToSign(id, assertion) ]
+  --[ Send($S, response) ]->
+    [ St_S_3($S, $V, skS, shared), Out(response) ]
 
 
-rule Signer_Receive_1:
+rule Signee_Receive_3:
   let
-  	data = <tosign, from, to>
-  	request = <senc(<idn, data>, shared), idn_free, data_free>
+  	response = <some_assertion, some_signature>
   in
-    [ St_S_1($S, ~id, $V, skS, shared), In(request) ]
-  --[ Recv($V, request), Equal(idn, idn_free), Equal(data, data_free) ]->
-    [ St_S_2($S, ~id, $V, skS, shared), ToSign(request) ]
+    [ St_V_2($V, $S, pk(skS), shared, id), In(<some_id, some_assertion, some_signature>) ]
+  --[ Recv($V, <some_id, some_assertion, some_signature>), Equal(sign{some_assertion}skS, some_signature), Equal(id, some_id) ]->
+    [ St_V_3($V, $S, pk(skS), shared), Resonse(response) ]
 
 
-rule Signer_Send_1:
+rule Signee_Send_4:
   let
-  	data = <tosign, from, to>
-  	request = <senc(<idn, data>, shared), idn, data>
-  	answer = <idn, data, sign{data}skS>
+  	answer = <assertion, signature>
   in
-    [ St_S_2($S, ~id, $V, skS, shared), ToSign(request) ]
-  --[ Send($V, answer) ]->
-    [ St_S_3($S, ~id, $V, skS, shared), Out(answer) ]
+    [ St_V_3($V, $S, pk(skS), shared), Resonse(<assertion, signature>) ]
+  --[ Send($V, <assertion, signature>) ]->
+    [ St_V_4($V, $S, pk(skS), shared), Answer(answer) ]
 
 
-rule Signee_Receive_2:
-  let
-  	signature = sign{data_new}skS
-  	response = <idn_new, data_new, signature>
-  in
-    [ St_V_3($V, ~id, $S, pkS, shared, idn, request), In(response) ]
-  --[ Recv($S, response), Equal(idn, idn_new), Equal(request, data_new), Verify(signature, request, pkS) ]->
-    [ St_V_4($V, ~id, $S, pkS, shared, idn, request), Response(<data_new, signature>) ]
+rule Network_Receive_4:
+    [ St_N_2($N, $S, $V, pk(skS), request), Answer(<assertion, signature>) ]
+  --[ Recv($N, <assertion, signature>), Equal(request, assertion), Finish(), FinalSignature(request, signature, pk(skS)) ]->
+    [ St_N_3($N, $S, $V, pk(skS), request, signature) ]
 
-
-rule Signee_Send_2:
-  let
-  	signature = sign{data}skS
-  	response = <data, signature>
-  in
-    [ St_V_4($V, ~id, $S, pkS, shared, idn, request), Response(response) ]
-  --[ Send($N, response) ]->
-    [ St_V_5($V, ~id, $S, pkS, shared, idn, request), Out(response) ]
-
-
-rule Network_Receive_2:
-  let
-  	signature = sign{data}skS
-  	answer = <data, signature>
-  in
-    [ St_N_2($N, ~id, $V, pk(skS), request), In(answer) ]
-  --[ Recv($V, answer), Equal(request, data), Finish() ]->
-    [ St_N_3($N, ~id, $V, pk(skS), request, signature) ]
-
+/*
+ *
+ * Lemmas
+ *
+ */
 
 lemma exists:
   exists-trace
-  "Ex #i. Finish()@i"
+  "Ex #i. Finish()@i & not(Ex B #j. Reveal(B)@j)"
+
+/*
+lemma ValidSignature:
+	all-traces
+  "All r s pkS #i. FinalSignature(r, s, pkS)@i ==> verify(s, r, pkS) = true"
+*/
 
 
-restriction Verify:
-  "All s d k #i. Verify(s, d, k)@i ==> verify(s, d, k) = true"
+/*
+ *
+ * Restrictions
+ *
+ */
 
 restriction Equal:
    "All x y #i. Equal(x, y)@i ==> x = y" 
 
 restriction OnlyOneSigner:
-	"All S1 S2 id1 id2 #i #j. Create(S1, id1, 'Signer')@i & Create(S2, id2, 'Signer')@j ==> #i = #j"
+	"All S1 S2 k1 k2 #i #j. CreateSigner(S1, k1, 'Signer')@i & CreateSigner(S2, k2, 'Signer')@j ==> #i = #j"
 
 restriction OnlyOneSignee:
-	"All S1 S2 id1 id2 #i #j. Create(S1, id1, 'Signee')@i & Create(S2, id2, 'Signee')@j ==> #i = #j"
-	
+	"All S1 S2 #i #j. Create(S1, 'Signee')@i & Create(S2, 'Signee')@j ==> #i = #j"
+
+restriction SameSignerPublic:
+  "All k1 k2 #i #j. SignerKey(k1)@i & SignerKey(k2)@j & not(#i = #j) ==> k1 = k2 & (Ex k S #m. CreateSigner(S, k, 'Signer')@m & k1 = pk(k))"
+
 end
