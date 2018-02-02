@@ -30,6 +30,13 @@ parser.addArgument(
     }
 );
 
+parser.addArgument(
+    [ '-t', '--timespan' ],
+    {
+        help: 'Time (in ms) within all the administrators need to scan their verifier at initialisation. Default 1min.'
+    }
+);
+
 var args = parser.parseArgs();
 
 var last_end_date;
@@ -39,21 +46,39 @@ if (args.port) {
     PORT = args.port;
 }
 
+
+// Different file paths
 const SECRET_KEYPATH = __dirname + '/sk/';
 const PUBLIC_KEYPATH = __dirname + '/pk/';
+const LOG_FILE = __dirname + '/logs/signer.log';
+const LOG_HASH = __dirname + '/logs/signer_log.hash';
+const VERIFIER_PUB_KEY_FILE = PUBLIC_KEYPATH + 'verifier_keys';
 
-var SHARED_KEY = fs.readFileSync(SECRET_KEYPATH + 'auth_key');
-var SIGNING_KEY = Buffer.from(fs.readFileSync(SECRET_KEYPATH + 'sign_key')).toString();
-SIGNING_KEY = str2buf(SIGNING_KEY, 'base64');
+// keys
+//var SHARED_KEY = fs.readFileSync(SECRET_KEYPATH + 'auth_key');
+//var SIGNING_KEY = Buffer.from(fs.readFileSync(SECRET_KEYPATH + 'sign_key')).toString();
+//SIGNING_KEY = str2buf(SIGNING_KEY, 'base64');
 
-const LOG_FILE = __dirname + '/logs/signer.log'
-const LOG_HASH = __dirname + '/logs/signer_log.hash'
+// Variables used for initialisation
+var initialised = false;
+var init_stage = 1;
+var N = 1;      // Number of participating administrators in initialisation
+var t;      // quorum threshold
+const TPM_KEY_PAIR = generateKeyPair();
+var first_msg = true;
+var verifier_keys = {};
+var timespan = 60000;
+if (args.timespan) {
+    timespan = args.timespan;
+}
+var answer_counter = 0;
 
 crypt_log("[+++] Server Startup");
 
-// Signee needs to know this public key in order to authenticate the key schedule.
-generateNewKeySchedule(3);
-
+// Display TPM Public Key in order for everyone to scan it.
+io.on('connection', (client) => {
+    io.sockets.emit('update_img', Buffer.from(TPM_KEY_PAIR.publicKey).toString('base64'));    
+});
 
 /*
     handle requests
@@ -68,79 +93,178 @@ app.post('/', function(req, res) {
 
     crypt_log("[+++] Received Request: " + req.body.qrcode);
 
-    if (incoming_request.signee_key) {
-        pairSystems(req, res);
-        return;
-    }
 
-    if (incoming_request.new_schedule) {
-        sendCurrentKeySchedule();
-        return;
-    }
+    if (!initialised) {
 
-    if (incoming_request.ack) {
-        if (verifyAuth(JSON.stringify(incoming_request.ack)), incoming_request.auth) {
-            res.end('acknowledged');
-            return;
-        } else {
-            res.end();
+        if (incoming_request.config && init_stage == 1) {
+            var config = incoming_request.config;
+            var pub_key = incoming_request.pub_key;
+
+            if (first_msg) {
+                N = config.N;
+                t = config.t;
+                first_msg = false;
+                timeout = setTimeout(() => {
+                    io.sockets.emit('ok', "WARNING: There was a timeout. Please start over!");
+                }, timespan);
+            } else {
+                if (config.N != N || config.t != t) {
+                    res.end();
+                    io.sockets.emit('ok', "ERROR: The configuration information is not consistent!");
+                }
+            }
+            
+            var length = Object.keys(verifier_keys).length;
+            if (length < N) {
+                if (!verifier_keys.hasOwnProperty(pub_key)) {
+                    verifier_keys[pub_key] = length+1;
+                } else {
+                    res.end();
+                    io.sockets.emit('ok', 'ERROR: You have already registered!');
+                }
+            } 
+
+            // we have received init from every administrator and all have been consistent
+            if (Object.keys(verifier_keys).length == N) {
+                clearTimeout(timeout);
+                keypair = generateKeyPair();
+                SIGNING_KEY = keypair.secretKey;
+                PUBLIC_KEY = keypair.publicKey;
+                fs.writeFileSync(SECRET_KEYPATH + 'sign_key', buf2str(SIGNING_KEY, 'base64'));
+                fs.writeFileSync(PUBLIC_KEYPATH + 'signer.pub', buf2str(PUBLIC_KEY, 'base64'));
+                res.end();
+                io.sockets.emit('ok', 'SUCCESS!\nPlease send now your nonces!');
+
+                console.log(verifier_keys);
+                init_stage = 2;
+            }
+        }
+
+        if (init_stage == 2) {
+            if (incoming_request.nonce) {
+                nonce = incoming_request.nonce;
+                sig = incoming_request.signature;
+
+                verified = false;
+                correct_key = "";
+                for(var key in verifier_keys) {
+                    if (verifySignature(JSON.stringify(nonce), sig, str2buf(key, 'base64'))) {
+                        verified = true;
+                        correct_key = key;
+                        break;
+                    }
+                }
+
+                if (verified) {
+                    response = {};
+
+                    response['id'] = verifier_keys[correct_key];
+                    response['admin_keys'] = verifier_keys;
+                    response['pub_key'] = buf2str(PUBLIC_KEY, 'base64');
+                    response['nonce'] = nonce;
+
+                    to_hash = {};
+                    to_hash['pub_key'] = response['pub_key'];
+                    to_hash['N'] = N;
+                    to_hash['t'] = t;
+                    to_hash['admin_keys'] = response['admin_keys'];
+                    hash = crypto.createHash('sha256')
+                    hash.update(JSON.stringify(to_hash));
+
+                    response['hash'] = hash.digest().toString('base64'); // todo
+
+                    to_sign = {};
+                    to_sign['nonce'] = response['nonce'];
+                    to_sign['hash'] = response['hash'];
+                    response['signature'] = signRequest(to_sign, TPM_KEY_PAIR.secretKey);
+
+                    answer_counter++;
+                    res.json(response);
+                }  else {
+                    res.end();
+                    io.sockets.emit('ok', 'ERROR! Your nonce could not be authenticated.');
+                }
+
+                if (answer_counter == N) {
+                    initialised = true;
+                }
+            }
+        }
+    } else {
+        if (incoming_request.signee_key) {
+            pairSystems(req, res);
             return;
         }
-    }
 
-    var data = incoming_request.data;
-    var auth = incoming_request.auth;
+        if (incoming_request.new_schedule) {
+            sendCurrentKeySchedule();
+            return;
+        }
 
-    var num_entries = Object.keys(data).length;
+        if (incoming_request.ack) {
+            if (verifyAuth(JSON.stringify(incoming_request.ack)), incoming_request.auth) {
+                res.end('acknowledged');
+                return;
+            } else {
+                res.end();
+                return;
+            }
+        }
 
-    // check if the data is correct, i.e. not altered and coming from the signee
-    if (!verifyAuth(JSON.stringify(data), auth)) {
+        var data = incoming_request.data;
+        var auth = incoming_request.auth;
 
-        crypt_log("[!!!] Verification of incoming request failed!");
+        var num_entries = Object.keys(data).length;
 
-        var error = {};
-        var ids = {};
-        
+        // check if the data is correct, i.e. not altered and coming from the signee
+        if (!verifyAuth(JSON.stringify(data), auth)) {
+
+            crypt_log("[!!!] Verification of incoming request failed!");
+
+            var error = {};
+            var ids = {};
+            
+            for (var i = 0; i < num_entries; i++) {
+                ids[i] = data[i]['id'];
+            }
+
+            error['error'] = 'There has been an error! The authentication token could not be verified';
+            error['ids'] = ids;
+            res.json(error);
+            return;
+        }
+
+        var responses = {};
+
         for (var i = 0; i < num_entries; i++) {
-            ids[i] = data[i]['id'];
+            var assertion = {};
+            var cur_data = data[i];
+
+            from = toDate(cur_data['from']);
+            to = toDate(cur_data['to']);
+            var validity = getValidityRange(from, to);
+
+            assertion['data'] = cur_data['data'];
+            assertion['valid_from'] = validity.from;
+            assertion['valid_until'] = validity.until;
+
+            var signature = signRequest(assertion, SIGNING_KEY);  
+
+            responses[i] = {};
+            responses[i]['id'] = cur_data['id'];
+            responses[i]['assertion'] = assertion;
+            responses[i]['signature'] = signature;  
         }
 
-        error['error'] = 'There has been an error! The authentication token could not be verified';
-        error['ids'] = ids;
-        res.json(error);
-        return;
+        var response = {};
+        response['data'] = responses;
+        response['auth'] = generateAuthToken(JSON.stringify(responses));
+        
+        crypt_log("[+++] Return response: " + JSON.stringify(response));
+
+        // send back response to the ajax success function which will then generate the qr code.
+        res.json(response);
     }
-
-    var responses = {};
-
-    for (var i = 0; i < num_entries; i++) {
-        var assertion = {};
-        var cur_data = data[i];
-
-        from = toDate(cur_data['from']);
-        to = toDate(cur_data['to']);
-        var validity = getValidityRange(from, to);
-
-        assertion['data'] = cur_data['data'];
-        assertion['valid_from'] = validity.from;
-        assertion['valid_until'] = validity.until;
-
-        var signature = signRequest(assertion);  
-
-        responses[i] = {};
-        responses[i]['id'] = cur_data['id'];
-        responses[i]['assertion'] = assertion;
-        responses[i]['signature'] = signature;  
-    }
-
-    var response = {};
-    response['data'] = responses;
-    response['auth'] = generateAuthToken(JSON.stringify(responses));
-    
-    crypt_log("[+++] Return response: " + JSON.stringify(response));
-
-    // send back response to the ajax success function which will then generate the qr code.
-    res.json(response);
 });
 
 server.listen(PORT);
@@ -203,9 +327,9 @@ function pairSystems(req, res) {
 
     The function returns the signature of the message
 */
-function signRequest(data) {
+function signRequest(data, sign_key) {
     console.time('signing_time');
-    var signature = curve.sign.detached(json2buf(data, encoding='ascii'), SIGNING_KEY);
+    var signature = curve.sign.detached(json2buf(data, encoding='ascii'), sign_key);
     signature = Buffer.from(signature).toString('base64');
     console.timeEnd('signing_time');
 
@@ -239,6 +363,13 @@ function verifyAuth(msg, auth_token) {
     hmac = crypto.createHmac('sha256', SHARED_KEY);
     hmac.update(msg);
     return auth_token == hmac.digest('base64');
+}
+
+/*
+    This function verifies the signature of the response. If the verification is successful, it returns true otherwise false.
+*/
+function verifySignature(msg, signature, pub_key) {
+    return curve.sign.detached.verify(str2buf(msg, 'ascii'), str2buf(signature, 'base64'), pub_key);
 }
 
 /*
@@ -368,7 +499,7 @@ function sendCurrentKeySchedule() {
         }
     }
     key_schedule['keys'] = keys;
-    key_schedule['signature'] = signRequest(keys);
+    key_schedule['signature'] = signRequest(keys, SIGNING_KEY);
 
     io.sockets.emit('update_img', key_schedule);    
 
@@ -460,7 +591,7 @@ function crypt_log(content) {
         var old_hash = "";
     }
     
-    var agr_hash = crypto.createHash('sha256')
+    var agr_hash = crypto.createHash('sha256');
     agr_hash.update(old_hash + content);
     var new_hash = agr_hash.digest('hex');
 
