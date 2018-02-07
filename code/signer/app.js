@@ -7,6 +7,7 @@ var fs = require('fs');
 var scheduler = require('node-schedule');
 var { exec } = require('child_process');
 var ArgumentParser = require('argparse').ArgumentParser;
+var constant = require('./constants.js');
 
 var app = express();
 var server = require('http').createServer(app);
@@ -26,37 +27,31 @@ var parser = new ArgumentParser({
 parser.addArgument(
     [ '-p', '--port' ],
     {
-        help: 'Port number on which the server listens'
+        help: 'Port number on which the server listens. DEFAULT: 3000.'
     }
 );
 
 parser.addArgument(
     [ '-t', '--timespan' ],
     {
-        help: 'Time (in ms) within all the administrators need to scan their verifier at initialisation. Default 1min.'
+        help: 'Time (in ms) within all the administrators need to scan their verifier at initialisation. DEFAULT 1min.'
     }
 );
 
 var args = parser.parseArgs();
 
+// Variables
 var last_end_date;
-
+var log_counter = 0;
 var PORT = 3000;
 if (args.port) {
     PORT = args.port;
 }
 
 
-// Different file paths
-const SECRET_KEYPATH = __dirname + '/sk/';
-const PUBLIC_KEYPATH = __dirname + '/pk/';
-const LOG_FILE = __dirname + '/logs/signer.log';
-const LOG_HASH = __dirname + '/logs/signer_log.hash';
-const VERIFIER_PUB_KEY_FILE = PUBLIC_KEYPATH + 'verifier_keys';
-
 // keys
-//var SHARED_KEY = fs.readFileSync(SECRET_KEYPATH + 'auth_key');
-//var SIGNING_KEY = Buffer.from(fs.readFileSync(SECRET_KEYPATH + 'sign_key')).toString();
+//var SHARED_KEY = fs.readFileSync(constant.SECRET_KEYPATH + 'auth_key');
+//var SIGNING_KEY = Buffer.from(fs.readFileSync(constant.SECRET_KEYPATH + 'sign_key')).toString();
 //SIGNING_KEY = str2buf(SIGNING_KEY, 'base64');
 
 // Variables used for initialisation
@@ -65,7 +60,7 @@ var init_stage = 1;
 var N = 1;      // Number of participating administrators in initialisation
 var t;      // quorum threshold
 const TPM_KEY_PAIR = generateKeyPair();
-var first_msg = true;
+var first_init_msg = true;
 var verifier_keys = {};
 var timespan = 60000;
 if (args.timespan) {
@@ -73,7 +68,11 @@ if (args.timespan) {
 }
 var answer_counter = 0;
 
-crypt_log("[+++] Server Startup");
+// Variables used for key replication
+var participating_ids = [];
+var REPLICATION_KEY = '';
+var first_rep_msg = true;
+var sign_key_enc = '';
 
 // Display TPM Public Key in order for everyone to scan it.
 io.on('connection', (client) => {
@@ -91,26 +90,33 @@ app.post('/', function(req, res) {
 
     incoming_request = JSON.parse(req.body.qrcode);
 
-    crypt_log("[+++] Received Request: " + req.body.qrcode);
-
 
     if (!initialised) {
+        /*
+         * SIGNER INITIALISATION
+         *
+         */
 
         if (incoming_request.config && init_stage == 1) {
             var config = incoming_request.config;
             var pub_key = incoming_request.pub_key;
 
-            if (first_msg) {
+            if (first_init_msg) {
                 N = config.N;
                 t = config.t;
-                first_msg = false;
+                first_init_msg = false;
                 timeout = setTimeout(() => {
-                    io.sockets.emit('ok', "WARNING: There was a timeout. Please start over!");
+                    io.sockets.emit('warning', "There was a timeout. Please start over!");
+                    first_init_msg = true;
+                    verifier_keys = {};
+                    crypt_log(constant.INIT, constant.TIME_EXCEEDED, 'pub:' + pub_key);
                 }, timespan);
             } else {
                 if (config.N != N || config.t != t) {
                     res.end();
-                    io.sockets.emit('ok', "ERROR: The configuration information is not consistent!");
+                    io.sockets.emit('error', "The configuration information is not consistent!");
+                    crypt_log(constant.INIT, constant.CONSISTENCY_FAIL, 'pub:' + pub_key);
+                    return;
                 }
             }
             
@@ -120,7 +126,9 @@ app.post('/', function(req, res) {
                     verifier_keys[pub_key] = length+1;
                 } else {
                     res.end();
-                    io.sockets.emit('ok', 'ERROR: You have already registered!');
+                    io.sockets.emit('error', 'You have already registered!');
+                    crypt_log(constant.INIT, constant.DOUBLE_REG, 'pub:' + pub_key);
+                    return;
                 }
             } 
 
@@ -128,12 +136,15 @@ app.post('/', function(req, res) {
             if (Object.keys(verifier_keys).length == N) {
                 clearTimeout(timeout);
                 keypair = generateKeyPair();
+
+                crypt_log(constant.NEW_KEY_PAIR, constant.SUCCESS, 'pub:' + Buffer.from(keypair.publicKey).toString('base64'));
+
                 SIGNING_KEY = keypair.secretKey;
                 PUBLIC_KEY = keypair.publicKey;
-                fs.writeFileSync(SECRET_KEYPATH + 'sign_key', buf2str(SIGNING_KEY, 'base64'));
-                fs.writeFileSync(PUBLIC_KEYPATH + 'signer.pub', buf2str(PUBLIC_KEY, 'base64'));
+                fs.writeFileSync(constant.SECRET_KEYPATH + 'sign_key', buf2str(SIGNING_KEY, 'base64'));
+                fs.writeFileSync(constant.PUBLIC_KEYPATH + 'signer.pub', buf2str(PUBLIC_KEY, 'base64'));
                 res.end();
-                io.sockets.emit('ok', 'SUCCESS!\nPlease send now your nonces!');
+                io.sockets.emit('success', 'Please send now your nonces!');
 
                 console.log(verifier_keys);
                 init_stage = 2;
@@ -148,7 +159,10 @@ app.post('/', function(req, res) {
                 verified = false;
                 correct_key = "";
                 for(var key in verifier_keys) {
-                    if (verifySignature(JSON.stringify(nonce), sig, str2buf(key, 'base64'))) {
+                    msg = verifySignatureBox(sig, str2buf(key, 'base64'));
+                    msg = buf2str(msg, 'base64');
+
+                    if (msg == nonce) {
                         verified = true;
                         correct_key = key;
                         break;
@@ -176,21 +190,193 @@ app.post('/', function(req, res) {
                     to_sign = {};
                     to_sign['nonce'] = response['nonce'];
                     to_sign['hash'] = response['hash'];
-                    response['signature'] = signRequest(to_sign, TPM_KEY_PAIR.secretKey);
+                    response['signature'] = signRequestBox(json2buf(to_sign, 'ascii'), TPM_KEY_PAIR.secretKey);
 
                     answer_counter++;
                     res.json(response);
                 }  else {
                     res.end();
-                    io.sockets.emit('ok', 'ERROR! Your nonce could not be authenticated.');
+                    io.sockets.emit('error', 'Your nonce could not be authenticated.');
+
+                    crypt_log(constant.INIT, constant.SIG_VERIF_FAIL, 'sig:' + sig);
+                    return;
                 }
 
                 if (answer_counter == N) {
                     initialised = true;
+
+                    // write public keys to file
+                    fs.writeFileSync(constant.VERIFIER_PUB_KEY_FILE, "");
+                    for (var key in verifier_keys) {
+                        fs.appendFileSync(constant.VERIFIER_PUB_KEY_FILE, key);
+                    }
+
+                    crypt_log(constant.INIT, constant.SUCCESS);
                 }
             }
         }
     } else {
+
+        if (incoming_request.replication_key) {
+            /*
+             * SIGNER REPLICATION
+             *
+             */
+            rep_key = incoming_request.replication_key;
+            id = incoming_request.id;
+            sig = incoming_request.signature;
+
+            var included = false;
+            var verified = false;
+            for (var key in verifier_keys) {
+                if (verifier_keys[key] == id) {
+                    included = true;
+
+                    to_verify = {
+                        'replication_key': rep_key,
+                        'id': id
+                    };
+
+                    if (verifySignature(JSON.stringify(to_verify), sig, str2buf(rep_key, 'base64'))) {
+                        verified = true;
+                    }
+                    break;
+                }
+            }
+            if (!included) {
+                res.end();
+                io.sockets.emit('error', 'You are not a registerd administrator!');
+                crypt_log(constant.KEY_REP, constant.WRONG_ID, 'id:' + id);
+                return;
+            }
+            if (!verified) {
+                res.end();
+                io.sockets.emit('error', 'Your signature could not be verified!');
+                crypt_log(constant.KEY_REP, constant.SIG_VERIF_FAIL, 'id:' + id + " sig:" + sig);
+                return;
+            }
+
+            if (first_rep_msg) {
+                REPLICATION_KEY = rep_key;
+                first_rep_msg = false;
+                timeout = setTimeout(() => {
+                    io.sockets.emit('warning', "There was a timeout. Please start over!");
+                    first_rep_msg = true;
+                    participating_ids = [];
+                    crypt_log(constant.KEY_REP, constant.TIME_EXCEEDED);
+                }, timespan);
+            }
+
+            if (rep_key != REPLICATION_KEY) {
+                res.end();
+                io.sockets.emit('error', 'Messages are not consistent!');
+                crypt_log(constant.KEY_REP, constant.CONSISTENCY_FAIL, 'id:' + id);
+                return;
+            } else {
+                if (!participating_ids.includes(id)) {
+                    participating_ids.push(id);
+                } else {
+                    res.end();
+                    io.sockets.emit('error', 'You already have submitted your message');
+                    crypt_log(constant.KEY_REP, constant.DOUBLE_SUBMIT, 'id:' + id);
+                    return;
+                }
+            }
+
+            if (participating_ids.length >= t) {
+                nonce = crypto.randomBytes(64).toString('hex');
+                to_send = {
+                    'nonce': nonce,
+                    'encrypted_key': encryptData(buf2str(SIGNING_KEY), nonce, REPLICATION_KEY, SIGNING_KEY)
+                }
+                res.json(to_send);
+                clearTimeout(timeout);
+                participating_ids = [];
+                first_rep_msg = true;
+                crypt_log(constant.KEY_REP, constant.SUCCESS);
+            }
+        }
+
+        if (incoming_request.encrypted_key) {
+            /*
+             * SIGNER REPLICATION OPPOSED PART
+             *
+             */
+            enc = incoming_request.encrypted_key;
+            nonce = incoming_request.nonce;
+            pub_key = incoming_request.pub_key;
+            sig = incoming_request.signature;
+
+            to_check = {
+                'pub_key': pub_key,
+                'encrypted_key': enc,
+            };
+
+            verified = false;
+            correct_key = "";
+            for(var key in verifier_keys) {
+                if (verifySignature(JSON.stringify(to_check), sig, str2buf(key, 'base64'))) {
+                    verified = true;
+                    correct_key = key;
+                    break;
+                }
+            }
+
+            if (!verified) {
+                res.end();
+                io.sockets.emit('error', 'Could not verify the message. Seems you are not registered!');
+                return;
+            }
+
+            if (first_rep_msg) {
+                sign_key_enc = enc;
+                first_rep_msg = false;
+                timeout = setTimeout(() => {
+                    io.sockets.emit('warning', "There was a timeout. Please start over!");
+                    first_rep_msg = true;
+                    participating_ids = [];
+                }, timespan);
+            }
+
+            if (enc != sign_key_enc) {
+                res.end();
+                io.sockets.emit('error', 'The messages have not been consistent!');
+                return;
+            } else {
+                id = verifier_keys[correct_key];
+                if (!participating_ids.includes(id)) {
+                    participating_ids.push(id);
+                } else {
+                    res.end();
+                    io.sockets.emit('error', 'You already have submitted your message');
+                    return;
+                }
+            }
+
+            if (participating_ids.length >= t) {
+                
+                tmp_key = decryptData(enc, nonce, pub_key, SIGNING_KEY);
+
+                if (tmp_key) {
+                    SIGNING_KEY = tmp_key;
+                } else {
+                    res.end();
+                    io.sockets.emit('error', 'Could not decrypt the key');
+                    return;
+                }
+
+                clearTimeout(timeout);
+                participating_ids = [];
+                first_rep_msg = true;
+            }
+        }   
+             
+        if (incoming_request.epoch) {
+            // log verification
+            verifyLog(incoming_request, res);
+            return;
+        }
+
         if (incoming_request.signee_key) {
             pairSystems(req, res);
             return;
@@ -219,7 +405,7 @@ app.post('/', function(req, res) {
         // check if the data is correct, i.e. not altered and coming from the signee
         if (!verifyAuth(JSON.stringify(data), auth)) {
 
-            crypt_log("[!!!] Verification of incoming request failed!");
+            crypt_log("Sign a Request", 'request verification failed', '');
 
             var error = {};
             var ids = {};
@@ -260,7 +446,6 @@ app.post('/', function(req, res) {
         response['data'] = responses;
         response['auth'] = generateAuthToken(JSON.stringify(responses));
         
-        crypt_log("[+++] Return response: " + JSON.stringify(response));
 
         // send back response to the ajax success function which will then generate the qr code.
         res.json(response);
@@ -269,6 +454,7 @@ app.post('/', function(req, res) {
 
 server.listen(PORT);
 
+crypt_log(constant.STARTUP, constant.SUCCESS);
 
 /*
     This function handles the pairing of the two systems, i.e., establishing a new shared secret for authentication
@@ -281,7 +467,6 @@ server.listen(PORT);
 function pairSystems(req, res) {
 
     console.log("PAIRING");
-    crypt_log("[+++] Start Pairing");
 
     var data = JSON.parse(req.body.qrcode);
 
@@ -290,7 +475,7 @@ function pairSystems(req, res) {
             console.log("[!!!] ERROR: Pairing failed due to incorrect authentication!");
             console.log("[!!!] --> Keep old shared key");
 
-            crypt_log("[!!!] ERROR: Pairing failed due to incorrect authentication!");
+            crypt_log("Pairing", 'authentication failed', '');
             return;
         }
     }
@@ -310,15 +495,83 @@ function pairSystems(req, res) {
     SHARED_KEY = shared_key
     console.log(SHARED_KEY);
 
-    crypt_log("[+++] Computed new shared key.");
-
-    fs.writeFileSync(SECRET_KEYPATH + 'auth_key', SHARED_KEY);
-
-    crypt_log("[+++] Wrote new key to file: " + SECRET_KEYPATH + 'auth_key');
+    fs.writeFileSync(constant.SECRET_KEYPATH + 'auth_key', SHARED_KEY);
 
     res.json(dh_exchange);
 
-    crypt_log("[+++] Sent response back: " + JSON.stringify(dh_exchange));
+}
+
+function verifyLog(data, res) {
+    epoch = data.epoch;
+    nonce = data.nonce;
+    sig = data.signature;
+
+    to_verify = {
+        'epoch': epoch,
+        'nonce': nonce
+    };
+
+
+    verified = false;
+    correct_key = "";
+    for(var key in verifier_keys) {
+        msg = verifySignatureBox(sig, str2buf(key, 'base64'));
+        msg = buf2str(msg, 'base64');
+
+        if (msg == JSON.stringify(to_verify)) {
+            verified = true;
+            correct_key = key;
+            break;
+        }
+    }
+
+    if (!verified) {
+        res.end();
+        io.sockets.emit('error', 'Verification failed');
+        return;
+    }
+
+    latest_epoch = Buffer.from(fs.readFileSync(constant.LOG_HASH)).toString();
+
+    logs = getLogs(epoch);
+
+    response = {
+        'latest_epoch': latest_epoch,
+        'nonce': nonce,
+        'logs': logs
+    }
+
+    signature = signRequestBox(json2buf(response), SIGNING_KEY);
+
+    response['signature'] = signature;
+
+    res.json(response);
+    return;
+}
+
+function getLogs(epoch) {
+    var line = '';
+
+    if (epoch != "") {
+        exec("grep -i '" + epoch + "' " + constant.LOG_COUNTER_FILE, (err, stdout, stderr) => {
+            if (stdout) {
+                line = stdout.split(',')[0];
+            }
+        });
+    } else {
+        line = 0;
+    }
+    
+
+    var logs = '';
+
+    exec("awk 'NR>=" + line + "' " + constant.LOG_FILE, (err, stdout, stderr) => {
+        if (stdout) {
+            logs = stdout.toString('base64');
+        }
+    });
+
+    return logs;
 }
 
 /*
@@ -333,9 +586,25 @@ function signRequest(data, sign_key) {
     signature = Buffer.from(signature).toString('base64');
     console.timeEnd('signing_time');
 
-    crypt_log("[+++] Signed Request. Signature: " + signature);
-
     return signature;
+}
+
+function signRequestBox(data, sign_key) {
+    return Buffer.from(curve.sign(data, sign_key)).toString('base64');
+}
+
+function encryptData(data, nonce, theirPubKey, mySecretKey) {
+    curve.box.publicKeyLength = 32;
+    curve.box.secretKeyLength = 64;
+    var enc = curve.box(data, nonce, theirPubKey, mySecretKey);
+    return enc;
+}
+
+function decryptData(data, nonce, theirPubKey, mySecretKey) {
+    curve.box.publicKeyLength = 32;
+    curve.box.secretKeyLength = 64;
+    var dec = curve.box.open(data, nonce, theirPubKey, mySecretKey);
+    return dec;
 }
 
 /*
@@ -346,8 +615,6 @@ function generateAuthToken(msg) {
     hmac = crypto.createHmac('sha256', SHARED_KEY);
     hmac.update(msg);
     var token = hmac.digest('base64');
-
-    crypt_log("[+++] Generated authentication token: " + token);
 
     return token;
 }
@@ -370,6 +637,10 @@ function verifyAuth(msg, auth_token) {
 */
 function verifySignature(msg, signature, pub_key) {
     return curve.sign.detached.verify(str2buf(msg, 'ascii'), str2buf(signature, 'base64'), pub_key);
+}
+
+function verifySignatureBox(signature, pub_key) {
+    return curve.sign.open(str2buf(signature, 'base64'), pub_key);
 }
 
 /*
@@ -423,8 +694,6 @@ function generateKeyPair() {
     curve.sign.secretKeyLength = 64;
     curve.sign.seedLength = 32;
     curve.sign.signatureLength = 64;
-    
-    crypt_log("[+++] Generated new key pair.");
 
     return curve.sign.keyPair();
 }
@@ -437,8 +706,8 @@ function generateNewKeySchedule(number_of_keys=10) {
         start_date = new Date();    
     }
     
-    fs.writeFileSync(SECRET_KEYPATH + 'sk_schedule', "");
-    fs.writeFileSync(PUBLIC_KEYPATH + 'pk_schedule', "");
+    fs.writeFileSync(constant.SECRET_KEYPATH + 'sk_schedule', "");
+    fs.writeFileSync(constant.PUBLIC_KEYPATH + 'pk_schedule', "");
 
     for (var i = 0; i < number_of_keys; i++) {
         keypair = generateKeyPair();
@@ -453,8 +722,8 @@ function generateNewKeySchedule(number_of_keys=10) {
         //start_date = new Date(start_date.setTime(start_date.getTime() + 2 * 60000));
         validity = getValidityRange(start_date, start_date, 'minute', 2);
 
-        fs.appendFileSync(SECRET_KEYPATH + 'sk_schedule', new Date(validity.from) + "," + new Date(validity.until) + "," + buf2str(secret_key, 'base64') + '\n');
-        fs.appendFileSync(PUBLIC_KEYPATH + 'pk_schedule', new Date(validity.from) + "," + new Date(validity.until) + "," + buf2str(public_key, 'base64') + '\n');
+        fs.appendFileSync(constant.SECRET_KEYPATH + 'sk_schedule', new Date(validity.from) + "," + new Date(validity.until) + "," + buf2str(secret_key, 'base64') + '\n');
+        fs.appendFileSync(constant.PUBLIC_KEYPATH + 'pk_schedule', new Date(validity.from) + "," + new Date(validity.until) + "," + buf2str(public_key, 'base64') + '\n');
 
         // add job to scheduler
         var new_job = scheduler.scheduleJob(new Date(validity.from), () => {
@@ -471,13 +740,10 @@ function generateNewKeySchedule(number_of_keys=10) {
         generateNewKeySchedule(3);
     });
 
-    crypt_log("[+++] Generated new Key Schedule");
-    crypt_log("[+++] Public Key Schedule written to: " + PUBLIC_KEYPATH + 'pk_schedule');
-    crypt_log("[+++] Private Key Schedule written to: " + SECRET_KEYPATH + 'sk_schedule');
 }
 
 function sendCurrentKeySchedule() {
-    schedule = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'pk_schedule')).toString();
+    schedule = Buffer.from(fs.readFileSync(constant.PUBLIC_KEYPATH + 'pk_schedule')).toString();
     schedule = schedule.split('\n');
 
     key_schedule = {}
@@ -503,11 +769,10 @@ function sendCurrentKeySchedule() {
 
     io.sockets.emit('update_img', key_schedule);    
 
-    crypt_log("[+++] Sent current Key Schedule");
 }
 
 function getNextSignKey() {
-    schedule = Buffer.from(fs.readFileSync(SECRET_KEYPATH + 'sk_schedule')).toString();
+    schedule = Buffer.from(fs.readFileSync(constant.SECRET_KEYPATH + 'sk_schedule')).toString();
 
     // if there are keys left in the keyschedule
     if (schedule != "") {
@@ -520,21 +785,19 @@ function getNextSignKey() {
         next_key = new_line[2];
 
         // delete current key from key schedule
-        exec("sed -i '/" + next_key.split('\/').join('\\\/') + "/d' " + SECRET_KEYPATH + 'sk_schedule', (err, stdout, stderr) => {
+        exec("sed -i '/" + next_key.split('\/').join('\\\/') + "/d' " + constant.SECRET_KEYPATH + 'sk_schedule', (err, stdout, stderr) => {
             if (err) {
                 console.log(stderr);
             }
         })
 
-        fs.writeFileSync(SECRET_KEYPATH + 'sign_key', next_key);
+        fs.writeFileSync(constant.SECRET_KEYPATH + 'sign_key', next_key);
         SIGNING_KEY = str2buf(next_key, 'base64');
 
         console.log("[***] NEW SIGNING KEY: ", Buffer.from(SIGNING_KEY).toString('base64'));
 
-        crypt_log("[+++] Set new SIGNING KEY from key schedule");
     } else {
         console.log("[***] No keys in the key schedule. Keep old PUBLIC KEY!");
-        crypt_log("[!!!] No keys in the key schedule. Keep old SIGNING KEY!");
     }
     
 }
@@ -581,19 +844,29 @@ function timeDifference(date1, date2, type) {
     }
 }
 
-function crypt_log(content) {
+function crypt_log(operation, success, information='') {
     var date = new Date();
-    fs.appendFileSync(LOG_FILE, date.toString() + ":    " + content + '\n');
+    var datetime = date.getDate() + "/"
+                + (date.getMonth()+1)  + "/" 
+                + date.getFullYear() + " @ "  
+                + ((date.getHours() < 10) ? "0" + date.getHours() : date.getHours()) + ":"  
+                + ((date.getMinutes() < 10) ? "0" + date.getMinutes() : date.getMinutes()) + ":" 
+                + ((date.getSeconds() < 10) ? "0" + date.getSeconds() : date.getSeconds());
+
+    var new_log_entry = datetime + '||' + operation + "||" + success + ((information != '') ? '||' + information : '') + '\n';
+    fs.appendFileSync(constant.LOG_FILE, new_log_entry);
 
     try{
-        var old_hash = Buffer.from(fs.readFileSync(LOG_HASH)).toString();    
+        var old_hash = Buffer.from(fs.readFileSync(constant.LOG_HASH)).toString();    
     } catch (e) {
         var old_hash = "";
     }
     
     var agr_hash = crypto.createHash('sha256');
-    agr_hash.update(old_hash + content);
+    agr_hash.update(old_hash + new_log_entry);
     var new_hash = agr_hash.digest('hex');
 
-    fs.writeFileSync(LOG_HASH, new_hash);
+    fs.writeFileSync(constant.LOG_HASH, new_hash);
+
+    fs.appendFileSync(constant.LOG_COUNTER_FILE, ++log_counter + "," + new_hash);
 }

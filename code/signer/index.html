@@ -39,23 +39,6 @@
                 var socket = io.connect('http://localhost:3000');
                 socket.on('connect', function(data) {
                     console.log("Hi from client");
-                    /*
-                    test = {
-                        'config': {
-                            'N': 1,
-                            't': 1,
-                        },
-                        'pub_key': 'x/Eh4AmmJxDEvvO5Q+NHobVxbNSqxBe6t4CYY2MaJ94='
-                    };
-                    
-                    test1 = {
-                              "nonce": {
-                                "nonce": 1234
-                              },
-                              "signature": "SSKgmDXfNBMPhKemWC6zEu07vpQwui99V6m7Dibf6yZCX8vqF9fDC3WIkH5uNT8oTaYHVn+pBA1h6zJkJDEtCw=="
-                            }
-                    generateQRCode(test);
-                    */
                 });
                 socket.on('update_img', function(data) {
                     show_info("", "key schedule", data);
@@ -72,8 +55,14 @@
                         scanner.start();
                     }, 750);
                 });
-                socket.on('ok', (data) => {
-                    show_info("", "", data);
+                socket.on('success', (data) => {
+                    show_info("", 'success', data);
+                });
+                socket.on('error', (data) => {
+                    show_info("", "error", data);
+                });
+                socket.on('warning', (data) => {
+                    show_info('', 'warning', data);
                 });
 
                 // Initialize the QR-Code scanner from the instascan library
