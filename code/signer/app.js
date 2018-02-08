@@ -5,7 +5,7 @@ var curve = require('tweetnacl');
 var crypto = require('crypto');
 var fs = require('fs');
 var scheduler = require('node-schedule');
-var { exec } = require('child_process');
+var { exec, execSync } = require('child_process');
 var ArgumentParser = require('argparse').ArgumentParser;
 var constant = require('./constants.js');
 
@@ -517,8 +517,8 @@ function verifyLog(data, res) {
     for(var key in verifier_keys) {
         msg = verifySignatureBox(sig, str2buf(key, 'base64'));
         msg = buf2str(msg, 'base64');
-
-        if (msg == JSON.stringify(to_verify)) {
+	
+        if (msg == new Buffer(JSON.stringify(to_verify)).toString('base64')) {
             verified = true;
             correct_key = key;
             break;
@@ -549,28 +549,21 @@ function verifyLog(data, res) {
     return;
 }
 
+
 function getLogs(epoch) {
     var line = '';
 
-    if (epoch != "") {
-        exec("grep -i '" + epoch + "' " + constant.LOG_COUNTER_FILE, (err, stdout, stderr) => {
-            if (stdout) {
-                line = stdout.split(',')[0];
-            }
-        });
+    if (epoch != "-1") {
+        line = Buffer.from(execSync("grep -i '" + epoch + "' " + constant.LOG_COUNTER_FILE)).toString();
+	line = line.split(',')[0] + 1;
     } else {
-        line = 0;
+        line = 1;
     }
     
 
-    var logs = '';
-
-    exec("awk 'NR>=" + line + "' " + constant.LOG_FILE, (err, stdout, stderr) => {
-        if (stdout) {
-            logs = stdout.toString('base64');
-        }
-    });
-
+    var logs = execSync("awk 'NR>=" + line + "' " + constant.LOG_FILE);
+    logs = new Buffer(logs).toString('base64');
+    
     return logs;
 }
 
@@ -853,8 +846,8 @@ function crypt_log(operation, success, information='') {
                 + ((date.getMinutes() < 10) ? "0" + date.getMinutes() : date.getMinutes()) + ":" 
                 + ((date.getSeconds() < 10) ? "0" + date.getSeconds() : date.getSeconds());
 
-    var new_log_entry = datetime + '||' + operation + "||" + success + ((information != '') ? '||' + information : '') + '\n';
-    fs.appendFileSync(constant.LOG_FILE, new_log_entry);
+    var new_log_entry = datetime + '||' + operation + "||" + success + ((information != '') ? '||' + information : '');
+    fs.appendFileSync(constant.LOG_FILE, new_log_entry + "\n");
 
     try{
         var old_hash = Buffer.from(fs.readFileSync(constant.LOG_HASH)).toString();    
@@ -868,5 +861,5 @@ function crypt_log(operation, success, information='') {
 
     fs.writeFileSync(constant.LOG_HASH, new_hash);
 
-    fs.appendFileSync(constant.LOG_COUNTER_FILE, ++log_counter + "," + new_hash);
+    fs.appendFileSync(constant.LOG_COUNTER_FILE, ++log_counter + "," + new_hash + "\n");
 }
