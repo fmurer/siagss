@@ -13,6 +13,9 @@
 
             <table style="width: 100%; table-layout: fixed;">
                 <tr>
+                    <div id="info_big" style="text-align: center; display: block; font-size: x-large;"></div>
+                </tr>
+                <tr>
                     <td id="qr_code" style="padding-left: 20pt;" rowspan="2"><canvas id="canvas"></td>
                     <td id="info" style="width: 40%; text-align: left; display: block; padding-left: 20pt; font-size: xx-small;"></td>
                 </tr>
@@ -25,6 +28,12 @@
 
                 var key_schedule_on = false;
 
+                function clear_screen() {
+                    document.getElementById('qr_code').innerHTML = '';
+                    document.getElementById('info').innerHTML = '';
+                    document.getElementById('info_big').innerHTML = '';
+                }
+
                 function show_info(preinfo, action, data) {
 
                     var info = preinfo + "<br><br>";
@@ -33,6 +42,13 @@
                     info += "<pre>" + JSON.stringify(data, null, 2) + "</pre>";
 
                     document.getElementById('info').innerHTML = info;
+                }
+
+                function show_info_big(action, data) {
+                    var info = action.toUpperCase() + "<br>";
+                    info += "<pre>" + data + "</pre>";
+
+                    document.getElementById('info_big').innerHTML = info;
                 }
 
                 // Handling the notifications of the server when there is a new message arriving
@@ -55,14 +71,23 @@
                         scanner.start();
                     }, 750);
                 });
+                socket.on('show_tpm', (data) => {
+                    show_info('', 'TPM Public Key', data);
+                    console.time('qr_generation_time');
+                    generateQRCode(data);
+                    console.timeEnd('qr_generation_time');
+                });
                 socket.on('success', (data) => {
-                    show_info("", 'success', data);
+                    show_info_big('success', data);
                 });
                 socket.on('error', (data) => {
-                    show_info("", "error", data);
+                    show_info_big("error", data);
                 });
                 socket.on('warning', (data) => {
-                    show_info('', 'warning', data);
+                    show_info_big('warning', data);
+                });
+                socket.on('clear_screen', (data) => {
+                    clear_screen();
                 });
 
                 // Initialize the QR-Code scanner from the instascan library

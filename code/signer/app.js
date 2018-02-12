@@ -76,7 +76,7 @@ var sign_key_enc = '';
 
 // Display TPM Public Key in order for everyone to scan it.
 io.on('connection', (client) => {
-    io.sockets.emit('update_img', Buffer.from(TPM_KEY_PAIR.publicKey).toString('base64'));    
+    io.sockets.emit('show_tpm', Buffer.from(TPM_KEY_PAIR.publicKey).toString('base64'));    
 });
 
 /*
@@ -97,6 +97,13 @@ app.post('/', function(req, res) {
          *
          */
 
+        if (!incoming_request.config && !incoming_request.nonce) {
+            io.sockets.emit('clear_screen', null);
+            io.sockets.emit('error', 'Please initialise the system first');
+            return;
+        }
+
+
         if (incoming_request.config && init_stage == 1) {
             var config = incoming_request.config;
             var pub_key = incoming_request.pub_key;
@@ -106,14 +113,17 @@ app.post('/', function(req, res) {
                 t = config.t;
                 first_init_msg = false;
                 timeout = setTimeout(() => {
+                    io.sockets.emit('clear_screen', null);
                     io.sockets.emit('warning', "There was a timeout. Please start over!");
                     first_init_msg = true;
                     verifier_keys = {};
                     crypt_log(constant.INIT, constant.TIME_EXCEEDED, 'pub:' + pub_key);
                 }, timespan);
+                io.sockets.emit('clear_screen', null);
             } else {
                 if (config.N != N || config.t != t) {
                     res.end();
+                    io.sockets.emit('clear_screen', null);
                     io.sockets.emit('error', "The configuration information is not consistent!");
                     crypt_log(constant.INIT, constant.CONSISTENCY_FAIL, 'pub:' + pub_key);
                     return;
@@ -126,6 +136,7 @@ app.post('/', function(req, res) {
                     verifier_keys[pub_key] = length+1;
                 } else {
                     res.end();
+                    io.sockets.emit('clear_screen', null);
                     io.sockets.emit('error', 'You have already registered!');
                     crypt_log(constant.INIT, constant.DOUBLE_REG, 'pub:' + pub_key);
                     return;
@@ -144,6 +155,7 @@ app.post('/', function(req, res) {
                 fs.writeFileSync(constant.SECRET_KEYPATH + 'sign_key', buf2str(SIGNING_KEY, 'base64'));
                 fs.writeFileSync(constant.PUBLIC_KEYPATH + 'signer.pub', buf2str(PUBLIC_KEY, 'base64'));
                 res.end();
+                io.sockets.emit('clear_screen', null);
                 io.sockets.emit('success', 'Please send now your nonces!');
 
                 console.log(verifier_keys);
@@ -153,16 +165,18 @@ app.post('/', function(req, res) {
 
         if (init_stage == 2) {
             if (incoming_request.nonce) {
+                io.sockets.emit('clear_screen', null);
                 nonce = incoming_request.nonce;
                 sig = incoming_request.signature;
 
                 verified = false;
                 correct_key = "";
                 for(var key in verifier_keys) {
+                    /*
                     msg = verifySignatureBox(sig, str2buf(key, 'base64'));
                     msg = buf2str(msg, 'base64');
-
-                    if (msg == nonce) {
+                    */
+                    if (verifySignature(str2buf(nonce, 'base64'), sig, str2buf(key, 'base64'))) {
                         verified = true;
                         correct_key = key;
                         break;
@@ -190,7 +204,8 @@ app.post('/', function(req, res) {
                     to_sign = {};
                     to_sign['nonce'] = response['nonce'];
                     to_sign['hash'] = response['hash'];
-                    response['signature'] = signRequestBox(json2buf(to_sign, 'ascii'), TPM_KEY_PAIR.secretKey);
+                    //response['signature'] = signRequestBox(json2buf(to_sign, 'ascii'), TPM_KEY_PAIR.secretKey);
+                    response['signature'] = signRequest(to_sign, TPM_KEY_PAIR.secretKey);
 
                     answer_counter++;
                     res.json(response);
@@ -237,7 +252,8 @@ app.post('/', function(req, res) {
                         'id': id
                     };
 
-                    if (verifySignature(JSON.stringify(to_verify), sig, str2buf(rep_key, 'base64'))) {
+                    //if (verifySignature(JSON.stringify(to_verify), sig, str2buf(rep_key, 'base64'))) {
+                    if (verifySignature(json2buf(to_verify, 'ascii'), sig, str2buf(rep_key, 'base64'))) {    
                         verified = true;
                     }
                     break;
@@ -284,11 +300,15 @@ app.post('/', function(req, res) {
             }
 
             if (participating_ids.length >= t) {
-                nonce = crypto.randomBytes(64).toString('hex');
+                nonce = crypto.randomBytes(64).toString('base64');
                 to_send = {
                     'nonce': nonce,
-                    'encrypted_key': encryptData(buf2str(SIGNING_KEY), nonce, REPLICATION_KEY, SIGNING_KEY)
+                    'encrypted_key': Buffer.from(encryptData(buf2str(SIGNING_KEY), nonce, REPLICATION_KEY, SIGNING_KEY)).toString('base64')
                 }
+                signature = signRequest(to_send, SIGNING_KEY);
+
+                to_send['signature'] = signature;
+
                 res.json(to_send);
                 clearTimeout(timeout);
                 participating_ids = [];
@@ -309,13 +329,15 @@ app.post('/', function(req, res) {
 
             to_check = {
                 'pub_key': pub_key,
-                'encrypted_key': enc,
+                'nonce': nonce,
+                'encrypted_key': enc
             };
 
             verified = false;
             correct_key = "";
             for(var key in verifier_keys) {
-                if (verifySignature(JSON.stringify(to_check), sig, str2buf(key, 'base64'))) {
+                //if (verifySignature(JSON.stringify(to_check), sig, str2buf(key, 'base64'))) {
+                if (verifySignature(json2buf(to_check, 'ascii'), sig, str2buf(key, 'base64'))) {
                     verified = true;
                     correct_key = key;
                     break;
@@ -515,10 +537,13 @@ function verifyLog(data, res) {
     verified = false;
     correct_key = "";
     for(var key in verifier_keys) {
+        /*
         msg = verifySignatureBox(sig, str2buf(key, 'base64'));
         msg = buf2str(msg, 'base64');
-	
-        if (msg == new Buffer(JSON.stringify(to_verify)).toString('base64')) {
+	    */
+
+        //if (msg == new Buffer(JSON.stringify(to_verify)).toString('base64')) {
+        if (verifySignature(json2buf(to_verify, 'ascii'), sig, str2buf(key, 'base64'))) {
             verified = true;
             correct_key = key;
             break;
@@ -541,7 +566,8 @@ function verifyLog(data, res) {
         'logs': logs
     }
 
-    signature = signRequestBox(json2buf(response), SIGNING_KEY);
+    //signature = signRequestBox(json2buf(response), SIGNING_KEY);
+    signature = signRequest(response, SIGNING_KEY);
 
     response['signature'] = signature;
 
@@ -629,7 +655,8 @@ function verifyAuth(msg, auth_token) {
     This function verifies the signature of the response. If the verification is successful, it returns true otherwise false.
 */
 function verifySignature(msg, signature, pub_key) {
-    return curve.sign.detached.verify(str2buf(msg, 'ascii'), str2buf(signature, 'base64'), pub_key);
+    //return curve.sign.detached.verify(str2buf(msg, 'ascii'), str2buf(signature, 'base64'), pub_key);
+    return curve.sign.detached.verify(msg, str2buf(signature, 'base64'), pub_key);
 }
 
 function verifySignatureBox(signature, pub_key) {
