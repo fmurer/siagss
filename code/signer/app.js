@@ -48,12 +48,6 @@ if (args.port) {
     PORT = args.port;
 }
 
-
-// keys
-//var SHARED_KEY = fs.readFileSync(constant.SECRET_KEYPATH + 'auth_key');
-//var SIGNING_KEY = Buffer.from(fs.readFileSync(constant.SECRET_KEYPATH + 'sign_key')).toString();
-//SIGNING_KEY = str2buf(SIGNING_KEY, 'base64');
-
 // Variables used for initialisation
 var initialised = false;
 var init_stage = 1;
@@ -174,10 +168,7 @@ app.post('/', function(req, res) {
                 verified = false;
                 correct_key = "";
                 for(var key in verifier_keys) {
-                    /*
-                    msg = verifySignatureBox(sig, str2buf(key, 'base64'));
-                    msg = buf2str(msg, 'base64');
-                    */
+
                     if (verifySignature(str2buf(nonce, 'base64'), sig, str2buf(key, 'base64'))) {
                         verified = true;
                         correct_key = key;
@@ -207,7 +198,7 @@ app.post('/', function(req, res) {
                     to_sign = {};
                     to_sign['nonce'] = response['nonce'];
                     to_sign['hash'] = response['hash'];
-                    //response['signature'] = signRequestBox(json2buf(to_sign, 'ascii'), TPM_KEY_PAIR.secretKey);
+
                     response['signature'] = signRequest(to_sign, TPM_KEY_PAIR.secretKey);
 
                     answer_counter++;
@@ -255,7 +246,6 @@ app.post('/', function(req, res) {
                         'id': id
                     };
 
-                    //if (verifySignature(JSON.stringify(to_verify), sig, str2buf(rep_key, 'base64'))) {
                     if (verifySignature(json2buf(to_verify, 'ascii'), sig, str2buf(key, 'base64'))) {    
                         verified = true;
                     }
@@ -307,7 +297,7 @@ app.post('/', function(req, res) {
 
                 to_send = {
                     'nonce': nonce,
-                    'encrypted_key': Buffer.from(encryptData(SIGNING_KEY, str2buf(nonce, 'base64'), str2buf(REPLICATION_KEY, 'base64'), ENC_KEY_PAIR.secretKey).toString('base64'))
+                    'encrypted_key': Buffer.from(encryptData(SIGNING_KEY, str2buf(nonce, 'base64'), str2buf(REPLICATION_KEY, 'base64'), ENC_KEY_PAIR.secretKey)).toString('base64')
                 }
                 signature = signRequest(to_send, SIGNING_KEY);
 
@@ -342,7 +332,6 @@ app.post('/', function(req, res) {
             verified = false;
             correct_key = "";
             for(var key in verifier_keys) {
-                //if (verifySignature(JSON.stringify(to_check), sig, str2buf(key, 'base64'))) {
                 if (verifySignature(json2buf(to_check, 'ascii'), sig, str2buf(key, 'base64'))) {
                     verified = true;
                     correct_key = key;
@@ -387,6 +376,9 @@ app.post('/', function(req, res) {
 
                 if (tmp_key) {
                     SIGNING_KEY = tmp_key;
+                    fs.writeFileSync(constant.SECRET_KEYPATH + 'sign_key', buf2str(SIGNING_KEY, 'base64'));
+                    res.end();
+                    io.sockets.emit('success', 'Key Replication Done!');
                 } else {
                     res.end();
                     io.sockets.emit('error', 'Could not decrypt the key');
@@ -545,12 +537,6 @@ function verifyLog(data, res) {
     verified = false;
     correct_key = "";
     for(var key in verifier_keys) {
-        /*
-        msg = verifySignatureBox(sig, str2buf(key, 'base64'));
-        msg = buf2str(msg, 'base64');
-	    */
-
-        //if (msg == new Buffer(JSON.stringify(to_verify)).toString('base64')) {
         if (verifySignature(json2buf(to_verify, 'ascii'), sig, str2buf(key, 'base64'))) {
             verified = true;
             correct_key = key;
@@ -574,7 +560,6 @@ function verifyLog(data, res) {
         'logs': logs
     }
 
-    //signature = signRequestBox(json2buf(response), SIGNING_KEY);
     signature = signRequest(response, SIGNING_KEY);
 
     response['signature'] = signature;

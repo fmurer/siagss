@@ -6,7 +6,7 @@
  *  Comments:
  */
 
-theory SignerInitialisation_2
+theory SignerInitialisation_3
 begin
 
 builtins: signing, hashing
@@ -97,13 +97,15 @@ rule Verifier_Send_Nonce:
     [ St_V_4($V, skV, pk(skTPM), <N, t>, ~nonce), Out(toSend) ]
 
 
-rule Signer_Receive_Nonce:
+
+
+rule Signer_Receive_Nonce_1:
     [ St_S_3($S, skTPM, <pkV1, pkV2, pkV3>, <N, t>, skS), In(sign{nonce}skV) ]
   --[ Recv($S, nonce), Included(pk(skV), <pkV1, pkV2, pkV3>) ]->
-    [ St_S_3($S, skTPM, <pkV1, pkV2, pkV3>, <N, t>, skS), Answer(nonce) ]
+    [ St_S_4($S, skTPM, <pkV1, pkV2, pkV3>, <pk(skV)>, <N, t>, skS, nonce) ]
 
 
-rule Signer_Send_Anwer:
+rule Signer_Send_Anwer_1:
   let
   	C = <N, t>
   	lambda = <pkV1, pkV2, pkV3>
@@ -111,17 +113,59 @@ rule Signer_Send_Anwer:
   	signed = sign{nonce, M}skTPM
   	response = <~id, lambda, pk(skS), signed>
   in
-    [ St_S_3($S, skTPM, <pkV1, pkV2, pkV3>, <N, t>, skS), Fr(~id), Answer(nonce) ]
+    [ St_S_4($S, skTPM, <pkV1, pkV2, pkV3>, <pk1>, <N, t>, skS, nonce), Fr(~id)]
   --[ Send($S, response) ]->
-    [ St_S_3($S, skTPM, <pkV1, pkV2, pkV3>, <N, t>, skS), Out(response) ]
+    [ St_S_5($S, skTPM, <pkV1, pkV2, pkV3>, <pk1>, <N, t>, skS), Out(response) ]
+
+
+rule Signer_Receive_Nonce_2:
+    [ St_S_5($S, skTPM, <pkV1, pkV2, pkV3>, <pk1>, <N, t>, skS), In(sign{nonce}skV) ]
+  --[ Recv($S, nonce), Included(pk(skV), <pkV1, pkV2, pkV3>), Diff(pk1, pk(skV)) ]->
+    [ St_S_6($S, skTPM, <pkV1, pkV2, pkV3>, <pk1, pk(skV)>, <N, t>, skS, nonce) ]
+
+
+rule Signer_Send_Anwer_2:
+  let
+    C = <N, t>
+    lambda = <pkV1, pkV2, pkV3>
+    M = h(pk(skS), C, lambda)
+    signed = sign{nonce, M}skTPM
+    response = <~id, lambda, pk(skS), signed>
+  in
+    [ St_S_6($S, skTPM, <pkV1, pkV2, pkV3>, <pk1, pk2>, <N, t>, skS, nonce), Fr(~id)]
+  --[ Send($S, response) ]->
+    [ St_S_7($S, skTPM, <pkV1, pkV2, pkV3>, <pk1, pk2>, <N, t>, skS), Out(response) ]
+
+
+rule Signer_Receive_Nonce_3:
+    [ St_S_7($S, skTPM, <pkV1, pkV2, pkV3>, <pk1, pk2>, <N, t>, skS), In(sign{nonce}skV) ]
+  --[ Recv($S, nonce), Included(pk(skV), <pkV1, pkV2, pkV3>), Diff(pk1, pk(skV)), Diff(pk2, pk(skV)) ]->
+    [ St_S_8($S, skTPM, <pkV1, pkV2, pkV3>, <pk1, pk2, pk(skV)>, <N, t>, skS, nonce) ]
+
+
+rule Signer_Send_Anwer_3:
+  let
+    C = <N, t>
+    lambda = <pkV1, pkV2, pkV3>
+    M = h(pk(skS), C, lambda)
+    signed = sign{nonce, M}skTPM
+    response = <~id, lambda, pk(skS), signed>
+  in
+    [ St_S_8($S, skTPM, <pkV1, pkV2, pkV3>, <pk1, pk2, pk3>, <N, t>, skS, nonce), Fr(~id)]
+  --[ Send($S, response) ]->
+    [ St_S_9($S, skTPM, <pkV1, pkV2, pkV3>, <N, t>, skS), Out(response) ]
+
+
 
 
 rule Verifier_Receive_Final:
   let
   	C = <N, t>
+    lambda = <pkV1, pkV2, pkV3>
+    signature = sign{nonce_new, h(pkS, C, lambda)}skTPM
   in
-    [ St_V_4($V, skV, pk(skTPM), <N, t>, nonce), In(<id, <pkV1, pkV2, pkV3>, pkS, sign{nonce_new, h(pkS, C, <pkV1, pkV2, pkV3>)}skTPM>) ]
-  --[ Recv($V, <id, <pkV1, pkV2, pkV3>, pkS, sign{nonce, h(pkS, C, <pkV1, pkV2, pkV3>)}skTPM>), Equal(nonce, nonce_new), Included(pk(skV), <pkV1, pkV2, pkV3>), Finish($V, pkS) ]->
+    [ St_V_4($V, skV, pk(skTPM), <N, t>, nonce), In(<id, lambda, pkS, signature>) ]
+  --[ Recv($V, <id, lambda, pkS, signature>), Equal(nonce, nonce_new), Included(pk(skV), <pkV1, pkV2, pkV3>), Finish($V, pkS) ]->
     [ St_V_5($V, skV, pk(skTPM), <N, t>, nonce, id, pkS, <pkV1, pkV2, pkV3>) ]
 
 
@@ -130,9 +174,13 @@ rule Verifier_Receive_Final:
 
 lemma exists:
 	exists-trace
-  //"Ex #i. Finish()@i"
-  //"All V #j. Create(V, 'Verifier')@j ==> Ex #i. Finish(V)@i"
-  "Ex S V sks #i #j. GenKey(S, sks)@i & Finish(V, pk(sks))@j & #i < #j"
+  //"Ex S V sks #i #j. GenKey(S, sks)@i & Finish(V, pk(sks))@j & #i < #j"
+  //"All V #i. Create(V, 'Verifier')@i ==> (Ex S sks #m #n. GenKey(S, sks)@m & Finish(V, pk(sks))@n & #m < #n)"
+  "Ex V1 V2 V3 S sks #a #b #c #d. GenKey(S, sks)@a & Finish(V1, pk(sks))@b
+                                                   & Finish(V2, pk(sks))@c
+                                                   & Finish(V3, pk(sks))@d
+                                                   & not (V1 = V2) & not(V1 = V3) & not(V2 = V3)
+                                                   & #a < #b & #a < #c & #a < #d"
 
 
 // restrictions
@@ -152,7 +200,5 @@ restriction OnlyOneSigner:
 restriction Included:
   "All p1 p2 p3 p4 #i. Included(p1, <p2, p3, p4>)@i ==> p1 = p2 | p1 = p3 | p1 = p4"
 
-restriction ExistenceOfVerifier:
-  "Ex V #i. Create(V, 'Verifier')@i"
 
 end

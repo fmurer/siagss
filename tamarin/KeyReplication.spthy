@@ -86,7 +86,7 @@ rule Signer_Check:
 
 rule Signer_Send_3:
   let
-  	enc = aenc{skS}pkR
+  	enc = aenc{$S, skS}pkR
   	response = sign{enc}skS
   in
     [ St_S_2($S, skS, <pk(skV1), pk(skV2)>, pkR) ]
@@ -120,9 +120,10 @@ rule Verifier_Send_5:
 rule Replication_Check:
 	let
 		skS = skS1
+    S = S1
 	in
-    [ St_R_1($R, skR, <pk(skV1), pk(skV2)>), SignerKey(sign{aenc{skS1}pk(skR)}skV1), SignerKey(sign{aenc{skS2}pk(skR)}skV2) ]
-  --[ Equal(skS1, skS2), Diff(pk(skV1), pk(skV2)), Finish(), Secret(skS), Honest($R), Honest($S) ]->
+    [ St_R_1($R, skR, <pk(skV1), pk(skV2)>), SignerKey(sign{aenc{S1, skS1}pk(skR)}skV1), SignerKey(sign{aenc{S2, skS2}pk(skR)}skV2) ]
+  --[ Equal(S1, S2), Equal(skS1, skS2), Diff(pk(skV1), pk(skV2)), Finish(), Secret(skS), Honest($R), Honest(S) ]->
     [ St_R_2($R, skR, <pk(skV1), pk(skV2)>, skS) ]
 
 
