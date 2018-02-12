@@ -152,6 +152,7 @@ app.post('/', function(req, res) {
 
                 SIGNING_KEY = keypair.secretKey;
                 PUBLIC_KEY = keypair.publicKey;
+
                 fs.writeFileSync(constant.SECRET_KEYPATH + 'sign_key', buf2str(SIGNING_KEY, 'base64'));
                 fs.writeFileSync(constant.PUBLIC_KEYPATH + 'signer.pub', buf2str(PUBLIC_KEY, 'base64'));
                 res.end();
@@ -253,7 +254,7 @@ app.post('/', function(req, res) {
                     };
 
                     //if (verifySignature(JSON.stringify(to_verify), sig, str2buf(rep_key, 'base64'))) {
-                    if (verifySignature(json2buf(to_verify, 'ascii'), sig, str2buf(rep_key, 'base64'))) {    
+                    if (verifySignature(json2buf(to_verify, 'ascii'), sig, str2buf(key, 'base64'))) {    
                         verified = true;
                     }
                     break;
@@ -300,10 +301,11 @@ app.post('/', function(req, res) {
             }
 
             if (participating_ids.length >= t) {
-                nonce = crypto.randomBytes(64).toString('base64');
+                nonce = crypto.randomBytes(24).toString('base64');
+
                 to_send = {
                     'nonce': nonce,
-                    'encrypted_key': Buffer.from(encryptData(buf2str(SIGNING_KEY), nonce, REPLICATION_KEY, SIGNING_KEY)).toString('base64')
+                    'encrypted_key': Buffer.from(encryptData(SIGNING_KEY, str2buf(nonce, 'base64'), str2buf(REPLICATION_KEY, 'base64'), SIGNING_KEY.slice(0, 32))).toString('base64')
                 }
                 signature = signRequest(to_send, SIGNING_KEY);
 
@@ -315,6 +317,8 @@ app.post('/', function(req, res) {
                 first_rep_msg = true;
                 crypt_log(constant.KEY_REP, constant.SUCCESS);
             }
+
+            return;
         }
 
         if (incoming_request.encrypted_key) {
@@ -377,7 +381,7 @@ app.post('/', function(req, res) {
 
             if (participating_ids.length >= t) {
                 
-                tmp_key = decryptData(enc, nonce, pub_key, SIGNING_KEY);
+                tmp_key = decryptData(str2buf(enc, 'base64'), str2buf(nonce, 'base64'), str2buf(pub_key, 'base64'), SIGNING_KEY.slice(0, 32));
 
                 if (tmp_key) {
                     SIGNING_KEY = tmp_key;
