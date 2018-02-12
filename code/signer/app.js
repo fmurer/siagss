@@ -60,6 +60,7 @@ var init_stage = 1;
 var N = 1;      // Number of participating administrators in initialisation
 var t;      // quorum threshold
 const TPM_KEY_PAIR = generateKeyPair();
+const ENC_KEY_PAIR = curve.box.keyPair();
 var first_init_msg = true;
 var verifier_keys = {};
 var timespan = 60000;
@@ -190,6 +191,7 @@ app.post('/', function(req, res) {
                     response['id'] = verifier_keys[correct_key];
                     response['admin_keys'] = verifier_keys;
                     response['pub_key'] = buf2str(PUBLIC_KEY, 'base64');
+                    response['enc_key'] = buf2str(ENC_KEY_PAIR.publicKey, 'base64');
                     response['nonce'] = nonce;
 
                     to_hash = {};
@@ -305,7 +307,7 @@ app.post('/', function(req, res) {
 
                 to_send = {
                     'nonce': nonce,
-                    'encrypted_key': Buffer.from(encryptData(SIGNING_KEY, str2buf(nonce, 'base64'), str2buf(REPLICATION_KEY, 'base64'), SIGNING_KEY.slice(0, 32))).toString('base64')
+                    'encrypted_key': Buffer.from(encryptData(SIGNING_KEY, str2buf(nonce, 'base64'), str2buf(REPLICATION_KEY, 'base64'), ENC_KEY_PAIR.secretKey).toString('base64'))
                 }
                 signature = signRequest(to_send, SIGNING_KEY);
 
@@ -381,7 +383,7 @@ app.post('/', function(req, res) {
 
             if (participating_ids.length >= t) {
                 
-                tmp_key = decryptData(str2buf(enc, 'base64'), str2buf(nonce, 'base64'), str2buf(pub_key, 'base64'), SIGNING_KEY.slice(0, 32));
+                tmp_key = decryptData(str2buf(enc, 'base64'), str2buf(nonce, 'base64'), str2buf(pub_key, 'base64'), ENC_KEY_PAIR.secretKey);
 
                 if (tmp_key) {
                     SIGNING_KEY = tmp_key;
@@ -395,6 +397,8 @@ app.post('/', function(req, res) {
                 participating_ids = [];
                 first_rep_msg = true;
             }
+
+            return;
         }   
              
         if (incoming_request.epoch) {
