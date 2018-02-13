@@ -405,7 +405,11 @@ app.post('/', function(req, res) {
         }
 
         if (incoming_request.new_schedule) {
-            sendCurrentKeySchedule();
+            if (incoming_request.initial) {
+                sendCurrentKeySchedule(true);
+            } else {
+                sendCurrentKeySchedule();
+            }
             return;
         }
 
@@ -755,7 +759,7 @@ function generateNewKeySchedule(number_of_keys=10) {
 
 }
 
-function sendCurrentKeySchedule() {
+function sendCurrentKeySchedule(initial) {
     schedule = Buffer.from(fs.readFileSync(constant.PUBLIC_KEYPATH + 'pk_schedule')).toString();
     schedule = schedule.split('\n');
 
@@ -776,6 +780,9 @@ function sendCurrentKeySchedule() {
 
             keys["key" + (i+1)] = cur_key;
         }
+    }
+    if (initial) {
+        key_schedule['pub_key'] = buf2str(PUBLIC_KEY, 'base64');
     }
     key_schedule['keys'] = keys;
     key_schedule['signature'] = signRequest(keys, SIGNING_KEY);

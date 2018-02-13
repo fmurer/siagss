@@ -348,6 +348,10 @@ function parseKeySchedule(data) {
 
     schedule = data;
 
+    if (schedule.pub_key) {
+        PUBLIC_KEY = str2buf(schedule.pub_key, 'base64');
+    }
+
     if (!verifySignature(schedule.keys, schedule.signature)) {
         console.log("[!!!] ERROR: Verification of key schedule failed!");
         return;
@@ -385,6 +389,7 @@ function getNewKeySchedule(initial=false) {
 
     // prioritize the request and push it to the front of the request_queue
     if (initial) {
+        data['initial'] = 'true';
         io.sockets.emit('update_img', data);
     } else {
         request_queue.unshift(data);
