@@ -48,6 +48,8 @@ if (args.port) {
     PORT = args.port;
 }
 
+SHARED_KEY = "";
+
 // Variables used for initialisation
 var initialised = false;
 var init_stage = 1;
@@ -406,6 +408,7 @@ app.post('/', function(req, res) {
 
         if (incoming_request.new_schedule) {
             if (incoming_request.initial) {
+                generateNewKeySchedule(3);
                 sendCurrentKeySchedule(true);
             } else {
                 sendCurrentKeySchedule();
@@ -518,7 +521,7 @@ function pairSystems(req, res) {
         dh_exchange['auth'] = generateAuthToken(signer_key);
     }
 
-    SHARED_KEY = shared_key
+    SHARED_KEY = shared_key;
     console.log(SHARED_KEY);
 
     fs.writeFileSync(constant.SECRET_KEYPATH + 'auth_key', SHARED_KEY);
