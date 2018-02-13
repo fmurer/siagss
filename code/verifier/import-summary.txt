@@ -1,0 +1,93 @@
+ECLIPSE ANDROID PROJECT IMPORT SUMMARY
+======================================
+
+Ignored Files:
+--------------
+The following files were *not* copied into the new Gradle project; you
+should evaluate whether these are still needed in your project and if
+so manually move them:
+
+* .externalToolBuilders/
+* .externalToolBuilders/JNI.launch
+* build.xml
+* docs/
+* docs/api/
+* docs/api/allclasses-frame.html
+* docs/api/allclasses-noframe.html
+* docs/api/constant-values.html
+* docs/api/deprecated-list.html
+* docs/api/help-doc.html
+* docs/api/index-all.html
+* docs/api/index.html
+* docs/api/overview-frame.html
+* docs/api/overview-summary.html
+* docs/api/overview-tree.html
+* docs/api/package-list
+* docs/api/resources/
+* docs/api/resources/background.gif
+* docs/api/resources/tab.gif
+* docs/api/resources/titlebar.gif
+* docs/api/resources/titlebar_end.gif
+* docs/api/script.js
+* docs/api/serialized-form.html
+* docs/api/stylesheet.css
+* docs/api/za/
+* docs/api/za/co/
+* docs/api/za/co/twyst/
+* docs/api/za/co/twyst/tweetnacl/
+* docs/api/za/co/twyst/tweetnacl/TweetNaCl.KeyPair.html
+* docs/api/za/co/twyst/tweetnacl/TweetNaCl.html
+* docs/api/za/co/twyst/tweetnacl/class-use/
+* docs/api/za/co/twyst/tweetnacl/class-use/TweetNaCl.KeyPair.html
+* docs/api/za/co/twyst/tweetnacl/class-use/TweetNaCl.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/
+* docs/api/za/co/twyst/tweetnacl/exceptions/AuthException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/DecryptException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/EncryptException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/HashException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/KeyPairException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/SignException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/VerifyException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/class-use/
+* docs/api/za/co/twyst/tweetnacl/exceptions/class-use/AuthException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/class-use/DecryptException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/class-use/EncryptException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/class-use/HashException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/class-use/KeyPairException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/class-use/SignException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/class-use/VerifyException.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/package-frame.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/package-summary.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/package-tree.html
+* docs/api/za/co/twyst/tweetnacl/exceptions/package-use.html
+* docs/api/za/co/twyst/tweetnacl/package-frame.html
+* docs/api/za/co/twyst/tweetnacl/package-summary.html
+* docs/api/za/co/twyst/tweetnacl/package-tree.html
+* docs/api/za/co/twyst/tweetnacl/package-use.html
+* proguard-project.txt
+
+Moved Files:
+------------
+Android Gradle projects use a different directory structure than ADT
+Eclipse projects. Here's how the projects were restructured:
+
+* AndroidManifest.xml => tweetNaCl/src/main/AndroidManifest.xml
+* jni/ => tweetNaCl/src/main/jni/
+* lint.xml => tweetNaCl/lint.xml
+* res/ => tweetNaCl/src/main/res/
+* src/ => tweetNaCl/src/main/java/
+
+Next Steps:
+-----------
+You can now build the project. The Gradle project needs network
+connectivity to download dependencies.
+
+Bugs:
+-----
+If for some reason your project does not build, and you determine that
+it is due to a bug or limitation of the Eclipse to Gradle importer,
+please file a bug at http://b.android.com with category
+Component-Tools.
+
+(This import summary is for your information only, and can be deleted
+after import once you are satisfied with the results.)
