@@ -3,7 +3,13 @@
  *  Model Name: KeyReplication.spthy
  *  Status: DEVELOPMENTAL
  *
- *  Comments:
+ *  Comments: This protocol defines the key replication. The following
+ *  explains the protocol in a Alice-Bob-Notation
+ *
+ *  S <- V:   Sign(K_R, id)   (t times where t is the quorum threshold)
+ *  S -> V:   Sign(Enc(skS))
+ *  V -> R:   Sign(pkS, Enc(skS)) (t times)
+ *
  */
 
 theory KeyReplication
@@ -11,9 +17,9 @@ begin
 
 builtins: asymmetric-encryption, signing
 functions: 
-	extract/2
+  extract/2
 equations: 
-	extract(sign{m}skS, pk(skS)) = m
+  extract(sign{m}skS, pk(skS)) = m
 
 
 /*
@@ -41,19 +47,19 @@ rule Reveal:
  */
 
 rule Init_Replication:
-    [ !SecretKey($R, skR), !PublicKey($V1, pkV1), !PublicKey($V2, pkV2) ]
-  --[ Create($R, skR, 'Replication'), Diff(pkV1, pkV2), VerifierKeys(pkV1, pkV2) ]->
-    [ St_R_1($R, skR, <pkV1, pkV2>) ]
+    [ !SecretKey($R, skR), !PublicKey($V1, pkV1), !PublicKey($V2, pkV2), !PublicKey($V3, pkV3) ]
+  --[ Create($R, skR, 'Replication'), SK(skR), AllDiff(pk(skR), pkV1, pkV2, pkV3), VerifierKeys(pkV1, pkV2, pkV3) ]->
+    [ St_R_1($R, skR, <pkV1, pkV2, pkV3>) ]
 
 rule Init_Verifier:
     [ !SecretKey($V, skV), !PublicKey($S, pkS), !PublicKey($R, pkR), Fr(~id) ]
-  --[ Create($V, skV, 'Verifier'), ReplicationPublicKey(pkR), SignerPublicKey(pkS) ]->
+  --[ Create($V, skV, 'Verifier'), SK(skV), ReplicationPublicKey(pkR), SignerPublicKey(pkS) ]->
     [ St_V_1($V, skV, pkS, pkR, ~id) ]
 
 rule Init_Signer:
-    [ !SecretKey($S, skS), !PublicKey($V1, pkV1), !PublicKey($V2, pkV2) ]
-  --[ Create($S, skS, 'Signer'), Diff(pkV1, pkV2), VerifierKeys(pkV1, pkV2), FinishInit() ]->
-    [ St_S_1($S, skS, <pkV1, pkV2>) ]
+    [ !SecretKey($S, skS), !PublicKey($V1, pkV1), !PublicKey($V2, pkV2), !PublicKey($V3, pkV3) ]
+  --[ Create($S, skS, 'Signer'), SK(skS), VerifExist(pkV1, pkV2, pkV3), AllDiff(pk(skS), pkV1, pkV2, pkV3), VerifierKeys(pkV1, pkV2, pkV3) ]->
+    [ St_S_1($S, skS, <pkV1, pkV2, pkV3>) ]
 
 
 /*
@@ -66,19 +72,19 @@ rule Init_Signer:
 
 rule Verifier_Send_1:
   let
-  	msg = sign{<pk(skR), id>}skV
+    msg = sign{<pk(skR), id>}skV
   in
     [ St_V_1($V, skV, pk(skS), pk(skR), id) ]
   --[ Send($V, msg) ]->
-    [ St_V_2($V, skV, pk(skS), pk(skR), id), Request(msg) ]
+    [ St_V_2($V, skV, pk(skS), pk(skR), id), /*Request(msg),*/ Out(msg) ]
 
 
 // Stage 2: Signer Check
 
 rule Signer_Check:
-    [ St_S_1($S, skS, <pk(skV1), pk(skV2)>), Request(sign{<pkR, id1>}skV1), Request(sign{<pkR, id2>}skV2) ]
-  --[ Diff(id1, id2), Diff(skV1, skV2) ]->
-    [ St_S_2($S, skS, <pk(skV1), pk(skV2)>, pkR) ]
+    [ St_S_1($S, skS, <pkV1, pkV2, pkV3>), In(sign{<pkR, id1>}skV1), In(sign{<pkR, id2>}skV2) ]
+  --[ Diff(id1, id2), Diff(skV1, skV2), Diff(pkR, pkV1), Diff(pkR, pkV2), Diff(pkR, pkV3), Included(pk(skV1), <pkV1, pkV2, pkV3>), Included(pk(skV2), <pkV1, pkV2, pkV3>) ]->
+    [ St_S_2($S, skS, <pkV1, pkV2, pkV3>, pkR) ]
 
 
 
@@ -86,18 +92,18 @@ rule Signer_Check:
 
 rule Signer_Send_3:
   let
-  	enc = aenc{$S, skS}pkR
-  	response = sign{enc}skS
+    enc = aenc{$S, skS}pkR
+    response = sign{enc}skS
   in
-    [ St_S_2($S, skS, <pk(skV1), pk(skV2)>, pkR) ]
-  --[ Send($S, response), Secret(skS), Honest($S), Honest($R) ]->
-    [ St_S_3($S, skS, <pk(skV1), pk(skV2)>, pkR), !SignerResponse(response) ]
+    [ St_S_2($S, skS, <pkV1, pkV2, pkV3>, pkR) ]
+  --[ Send($S, response), Secret($S, skS), Honest($S), Honest($R) ]->
+    [ St_S_3($S, skS, <pkV1, pkV2, pkV3>, pkR), /*!SignerResponse(response),*/ Out(response) ]
 
 
 // Stage 4: Verifier Check
 
 rule Verifier_Check:
-    [ St_V_2($V, skV, pk(skS), pk(skR), id), !SignerResponse(sign{enc}skS) ]
+    [ St_V_2($V, skV, pk(skS), pk(skR), id), /*!SignerResponse(sign{enc}skS)*/ In(sign{enc}skS) ]
   -->
     [ St_V_3($V, skV, pk(skS), pk(skR), id, enc) ]
 
@@ -107,24 +113,20 @@ rule Verifier_Check:
 
 rule Verifier_Send_5:
   let
-  	response = sign{enc}skV
+    response = sign{enc}skV
   in
     [ St_V_3($V, skV, pk(skS), pk(skR), id, enc) ]
   --[ Send($V, response) ]->
-    [ St_V_4($V, skV, pk(skS), pk(skR), id), SignerKey(response) ]
+    [ St_V_4($V, skV, pk(skS), pk(skR), id), /*SignerKey(response),*/ Out(response) ]
 
 
 
 // Stage 6: Replication Check
 
 rule Replication_Check:
-	let
-		skS = skS1
-    S = S1
-	in
-    [ St_R_1($R, skR, <pk(skV1), pk(skV2)>), SignerKey(sign{aenc{S1, skS1}pk(skR)}skV1), SignerKey(sign{aenc{S2, skS2}pk(skR)}skV2) ]
-  --[ Equal(S1, S2), Equal(skS1, skS2), Diff(pk(skV1), pk(skV2)), Finish(), Secret(skS), Honest($R), Honest(S) ]->
-    [ St_R_2($R, skR, <pk(skV1), pk(skV2)>, skS) ]
+    [ St_R_1($R, skR, <pkV1, pkV2, pkV3>), In(sign{aenc{S, skS}pk(skR)}skV1), In(sign{aenc{S, skS}pk(skR)}skV2) ]
+  --[ Diff(skV1, skV2), Included(pk(skV1), <pkV1, pkV2, pkV3>), Included(pk(skV2), <pkV1, pkV2, pkV3>), Finish(), Secret(S, skS), Honest($R), Honest(S) ]->
+    [ St_R_2($R, skR, <pkV1, pkV2, pkV3>, skS) ]
 
 
 /*
@@ -133,19 +135,17 @@ rule Replication_Check:
  *
  */
 
+
 lemma executeability:
-	exists-trace
-		"Ex #i. Finish()@i"
-
-
-lemma correctInit:
   exists-trace
-  	"Ex S V R k1 k2 k3 #a #b #c #d. FinishInit()@a & Create(S, k1, 'Signer')@b & Create(V, k2, 'Verifier')@c & Create(R, k3, 'Replication')@d"
+    "Ex #i. Finish()@i & not(Ex B #j. Reveal(B)@j)"
 
 
 lemma SecretSigningKey:
-	all-traces
-	"All k #i. Secret(k)@i ==> (not(Ex #j. K(k)@j)) | (Ex B #j. Reveal(B)@j & Honest(B)@i)"
+  all-traces
+  "All S k #i. (Secret(S, k)@i & not(Ex X #a. not(S = X) & Reveal(X)@a)) ==> (not(Ex #j. K(k)@j)) | (Ex B #j. Reveal(B)@j & Honest(B)@i)"
+
+
 
 /*
  *
@@ -153,14 +153,15 @@ lemma SecretSigningKey:
  *
  */
 
-restriction VerifierPublicKeys:
-  "All k1 k2 k3 k4 #a #b. (VerifierKeys(k1, k2)@a & VerifierKeys(k3, k4)@b & not(#a = #b)) ==>
-  												(k1 = k3 & k2 = k4) &
-  												(Ex V1 V2 sk1 sk2 #c #d. Create(V1, sk1, 'Verifier')@c & Create(V2, sk2, 'Verifier')@d & not(#c = #d) & k1 = pk(sk1) & k2 = pk(sk2))
-  "
 
+restriction SameVerifierKeys:
+  "All k1 k2 k3 k4 k5 k6 #a #b. VerifierKeys(k1, k2, k3)@a & VerifierKeys(k4, k5, k6)@b & not(#a = #b) ==> (k1 = k4 & k2 = k5 & k3 = k6) "
+                                
 restriction NoSameSecretKeys:
-	"All V1 V2 k1 k2 #a #b. Create(V1, k1, 'Verifier')@a & Create(V2, k2, 'Verifier')@b & not(#a = #b) ==> not(V1 = V2) & not(k1 = k2)"
+  "All V1 V2 k1 k2 #a #b. Create(V1, k1, 'Verifier')@a & Create(V2, k2, 'Verifier')@b & not(#a = #b) ==> not(V1 = V2) & not(k1 = k2)"
+
+restriction uniqueKey:
+  "All k1 k2 #i #j. SK(k1)@i & SK(k2)@j & not(#i = #j) ==> not(k1 = k2) "
 
 restriction CorrectReplicationPublicKey:
   "All k1 #i. ReplicationPublicKey(k1)@i ==> (Ex R k2 #j. Create(R, k2, 'Replication')@j & k1 = pk(k2))"
@@ -168,18 +169,28 @@ restriction CorrectReplicationPublicKey:
 restriction CorrectSignerPublicKey:
   "All k1 #i. SignerPublicKey(k1)@i ==> (Ex R k2 #j. Create(R, k2, 'Signer')@j & k1 = pk(k2))"
 
-
 restriction Equal:
-	"All x y #i. Equal(x, y)@i ==> x = y"
+  "All x y #i. Equal(x, y)@i ==> x = y"
 
 restriction Diff:
-	"All x y #i. Diff(x, y)@i ==> not(x = y)"
+  "All x y #i. Diff(x, y)@i ==> not(x = y)"
 
 restriction OnlyOneSigner:
-	"All S1 S2 k1 k2 #i #j. Create(S1, k1, 'Signer')@i & Create(S2, k2, 'Signer')@j ==> #i = #j"
+  "All S1 S2 k1 k2 #i #j. Create(S1, k1, 'Signer')@i & Create(S2, k2, 'Signer')@j ==> #i = #j"
 
 restriction OnlyOneReplication:
-	"All S1 S2 k1 k2 #i #j. Create(S1, k1, 'Replication')@i & Create(S2, k2, 'Replication')@j ==> #i = #j"
+  "All S1 S2 k1 k2 #i #j. Create(S1, k1, 'Replication')@i & Create(S2, k2, 'Replication')@j ==> #i = #j"
+
+restriction Included:
+  " All p1 p2 p3 p4 #i. Included(p1, <p2, p3, p4>)@i ==> p1 = p2 | p1 = p3 | p1 = p4"
+
+restriction AllDiff:
+  " All k1 k2 k3 k4 #i. AllDiff(k1, k2, k3, k4)@i ==> not(k1 = k2) &
+                                                      not(k1 = k3) &
+                                                      not(k1 = k4) &
+                                                      not(k2 = k3) & 
+                                                      not(k2 = k4) & 
+                                                      not(k3 = k4)"
 
 
 end

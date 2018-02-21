@@ -1,6 +1,6 @@
 /*
  *  Author: Fabian Murer
- *  Model Name: LogVerification
+ *  Model Name: LogVerification.spthy
  *  Status: DEVELOPMENTAL
  *
  *  Comments: This protocol is used for log verification
@@ -36,38 +36,38 @@ rule Reveal:
 // Initialisation
 
 rule Init_Signer:
-    [ Fr(~id), !SecretKey($S, skS), !PublicKey($V, pkV) ]
-	--[ Create($S, ~id, 'Signer') ]->
-    [ St_S_1($S, ~id, $V, skS, pkV) ]
+    [ !SecretKey(S, skS), !PublicKey(V1, pkV1), !PublicKey(V2, pkV2), !PublicKey(V3, pkV3) ]
+	--[ Create(S, 'Signer'), Diff(pkV1, pkV2), Diff(pkV1, pkV3), Diff(pkV2, pkV3) ]->
+    [ St_S_1(S, skS, <pkV1, pkV2, pkV3>) ]
 
 rule Init_Verifier:
-    [ Fr(~id), !SecretKey($V, skV), !PublicKey($S, pkS) ]
-	--[ Create($V, ~id, 'Verifier') ]->
-    [ St_V_1($V, ~id, $S, skV, pkS) ]
+    [ Fr(~id), !SecretKey(V, skV), !PublicKey(S, pkS) ]
+	--[ Create(V, 'Verifier') ]->
+    [ St_V_1(V, S, skV, pkS) ]
 
 
 // Protocol
 
 rule V_1_Send:
-    [ St_V_1($V, ~id, $S, skV, pkS), Fr(~nonce), Fr(~hash) ]
-	--[ Send($V, sign{~hash, ~nonce}skV) ]->
-    [ St_V_2($V, ~id, $S, skV, pkS, ~nonce, ~hash), Out(sign{~hash, ~nonce}skV) ]
+    [ St_V_1(V, S, skV, pkS), Fr(~nonce), Fr(~hash) ]
+	--[ Send(V, sign{~hash, ~nonce}skV) ]->
+    [ St_V_2(V, S, skV, pkS, ~nonce, ~hash), Out(sign{~hash, ~nonce}skV) ]
 
 rule S_1_Receive:
-    [ St_S_1($S, ~id, $V, skS, pk(skV)), In(sign{hash, n}skV) ]
-	--[ Recv($V, sign{hash, n}skV) ]->
-    [ St_S_2($S, ~id, $V, skS, pk(skV), hash, n) ]
+    [ St_S_1(S, skS, <pkV1, pkV2, pkV3>), In(sign{hash, n}skV) ]
+	--[ Recv($V, sign{hash, n}skV), Included(pk(skV), <pkV1, pkV2, pkV3>) ]->
+    [ St_S_2(S, skS, <pkV1, pkV2, pkV3>, hash, n, pk(skV)) ]
 
 
 rule S_2_Send:
-    [ St_S_2($S, ~id, $V, skS, pk(skV), hash, n), Fr(~L), Fr(~h_new) ]
-	--[ Send($S, sign{~L, ~h_new, n}skS), Running($S, $V, <'I', 'R', <~L, ~h_new, n>>) ]->
-    [ St_S_3($S, ~id, $V, skS, pk(skV), hash, n, ~L), Out(sign{~L, ~h_new, n}skS) ]
+    [ St_S_2(S, skS, <pkV1, pkV2, pkV3>, hash, n, admin), Fr(~L), Fr(~h_new) ]
+	--[ Send(S, sign{~L, ~h_new, n}skS), Running(pk(skS), admin, <'I', 'R', <~L, ~h_new, n>>) ]->
+    [ St_S_3(S, skS, <pkV1, pkV2, pkV3>, hash, n, ~L), Out(sign{~L, ~h_new, n}skS) ]
 
 rule V_2_Receive:
-    [ St_V_2($V, ~id, $S, skV, pk(skS), nonce, hash), In(sign{log, new_hash, nonce}skS) ]
-	--[ Recv($S, sign{log, new_hash, nonce}skS), Commit($V, $S, <'I', 'R', <log, new_hash, nonce>>), Honest($S), Honest($V), Finish($V) ]->
-    [ St_V_3($V, ~id, $S, skV, pk(skS), nonce, hash, log, new_hash) ]
+    [ St_V_2(V, S, skV, pk(skS), nonce, hash), In(sign{log, new_hash, nonce}skS) ]
+	--[ Recv(S, sign{log, new_hash, nonce}skS), Commit(pk(skV), pk(skS), <'I', 'R', <log, new_hash, nonce>>), Honest(S), Honest(V), Finish(V) ]->
+    [ St_V_3(V, S, skV, pk(skS), nonce, hash, log, new_hash) ]
 
 
 
@@ -92,5 +92,17 @@ lemma injectiveagreementINITIATOR:
                            & not (#i2 = #i)))
               | (Ex X #r. Reveal(X)@r & Honest(X) @i)"
 
+
+
+// Restrictions
+
+restriction Included:
+  " All p1 p2 p3 p4 #i. Included(p1, <p2, p3, p4>)@i ==> p1 = p2 | p1 = p3 | p1 = p4"
+
+restriction Equal:
+  "All x y #i. Equal(x, y)@i ==> x = y"
+
+restriction Diff:
+  "All x y #i. Diff(x, y)@i ==> not(x = y)"
 
 end

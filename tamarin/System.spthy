@@ -33,19 +33,19 @@ rule Reveal:
 // Initialisation
 
 rule Init_Network:
-    [ !PublicKey($S, pkS) ]
+    [ !PublicKey(S, pkS) ]
   --[ Create($N, 'Network'), SignerKey(pkS) ]->
-    [ St_N_1($N, $S, $V, pkS) ]
+    [ St_N_1($N, S, $V, pkS) ]
 
 rule Init_Signee:
-    [ !PublicKey($S, pkS), !SharedKey($S, $V, shared) ]
-  --[ Create($V, 'Signee'), SignerKey(pkS) ]->
-    [ St_V_1($V, $S, pkS, shared) ]
+    [ !PublicKey(S, pkS), !SharedKey(S, V, shared) ]
+  --[ Create(V, 'Signee'), SignerKey(pkS) ]->
+    [ St_V_1(V, S, pkS, shared) ]
 
 rule Init_Signer:
-    [ !SecretKey($S, skS), !SharedKey($S, $V, shared) ]
-  --[ CreateSigner($S, skS, 'Signer') ]->
-    [ St_S_1($S, $V, skS, shared) ]
+    [ !SecretKey(S, skS), !SharedKey(S, V, shared) ]
+  --[ CreateSigner(S, skS, 'Signer') ]->
+    [ St_S_1(S, V, skS, shared) ]
 
 
 /*
@@ -59,9 +59,9 @@ rule Network_Send_1:
   let
   	request = <~data, ~from, ~to>
   in
-    [ St_N_1($N, $S, $V, pk(skS)), Fr(~data), Fr(~from), Fr(~to) ]
+    [ St_N_1($N, S, $V, pk(skS)), Fr(~data), Fr(~from), Fr(~to) ]
   --[ Send($N, request) ]->
-    [ St_N_2($N, $S, $V, pk(skS), request), RequestFromNet(request) ]
+    [ St_N_2($N, S, $V, pk(skS), request), Out(request) ]
 
 
 rule Signee_Send_1:
@@ -70,15 +70,15 @@ rule Signee_Send_1:
   	id = h(assertion)
   	mac = senc(<id, assertion>, shared)
   in
-    [ St_V_1($V, $S, pk(skS), shared), RequestFromNet(<data, from, to>) ]
-  --[ Recv($V, <data, from, to>) ]->
-    [ St_V_2($V, $S, pk(skS), shared, id), Out(<id, assertion, mac>) ]
+    [ St_V_1(V, S, pk(skS), shared), In(<data, from, to>) ]
+  --[ Recv(V, <data, from, to>) ]->
+    [ St_V_2(V, S, pk(skS), shared, id), Out(<id, assertion, mac>) ]
 
 
 rule Signer_Receive_2:
-    [ St_S_1($S, $V, skS, shared), In(<some_id, some_assertion, some_mac>) ]
-  --[ Recv($S, <some_id, some_assertion, some_mac>), Equal(senc(<some_id, some_assertion>, shared), some_mac) ]->
-    [ St_S_2($S, $V, skS, shared), ToSign(some_id, some_assertion) ]
+    [ St_S_1(S, V, skS, shared), In(<some_id, some_assertion, some_mac>) ]
+  --[ Recv(S, <some_id, some_assertion, some_mac>), Equal(senc(<some_id, some_assertion>, shared), some_mac) ]->
+    [ St_S_2(S, V, skS, shared), ToSign(some_id, some_assertion) ]
 
 
 rule Signer_Send_3:
@@ -86,33 +86,33 @@ rule Signer_Send_3:
   	signature = sign{assertion}skS
   	response = <id, assertion, signature>
   in
-    [ St_S_2($S, $V, skS, shared), ToSign(id, assertion) ]
-  --[ Send($S, response) ]->
-    [ St_S_3($S, $V, skS, shared), Out(response) ]
+    [ St_S_2(S, V, skS, shared), ToSign(id, assertion) ]
+  --[ Send(S, response), SecretSign(skS), SecretShared(shared), Honest(S), Honest(V)]->
+    [ St_S_3(S, V, skS, shared), Out(response) ]
 
 
 rule Signee_Receive_3:
   let
   	response = <some_assertion, some_signature>
   in
-    [ St_V_2($V, $S, pk(skS), shared, id), In(<some_id, some_assertion, some_signature>) ]
-  --[ Recv($V, <some_id, some_assertion, some_signature>), Equal(sign{some_assertion}skS, some_signature), Equal(id, some_id) ]->
-    [ St_V_3($V, $S, pk(skS), shared), Resonse(response) ]
+    [ St_V_2(V, S, pk(skS), shared, id), In(<some_id, some_assertion, some_signature>) ]
+  --[ Recv(V, <some_id, some_assertion, some_signature>), Equal(sign{some_assertion}skS, some_signature), Equal(id, some_id) ]->
+    [ St_V_3(V, S, pk(skS), shared), Resonse(response) ]
 
 
 rule Signee_Send_4:
   let
   	answer = <assertion, signature>
   in
-    [ St_V_3($V, $S, pk(skS), shared), Resonse(<assertion, signature>) ]
-  --[ Send($V, <assertion, signature>) ]->
-    [ St_V_4($V, $S, pk(skS), shared), Answer(answer) ]
+    [ St_V_3(V, S, pk(skS), shared), Resonse(<assertion, signature>) ]
+  --[ Send(V, <assertion, signature>), FinishSignee() ]->
+    [ St_V_4(V, S, pk(skS), shared), Out(answer) ]
 
 
 rule Network_Receive_4:
-    [ St_N_2($N, $S, $V, pk(skS), request), Answer(<assertion, signature>) ]
-  --[ Recv($N, <assertion, signature>), Equal(request, assertion), Finish(), FinalSignature(request, signature, pk(skS)) ]->
-    [ St_N_3($N, $S, $V, pk(skS), request, signature) ]
+    [ St_N_2($N, S, $V, pk(skS), request), In(<assertion, signature>) ]
+  --[ Recv($N, <assertion, signature>), Equal(request, assertion), Finish(), FinalSignature(request, signature, skS), Check(verify(signature, request, pk(skS))) ]->
+    [ St_N_3($N, S, $V, pk(skS), request, signature) ]
 
 /*
  *
@@ -122,14 +122,19 @@ rule Network_Receive_4:
 
 lemma exists:
   exists-trace
-  "Ex #i. Finish()@i & not(Ex B #j. Reveal(B)@j)"
+  "Ex r s skS #i #k. FinishSignee()@k & Finish()@i & #k < #i & not(Ex B #j. Reveal(B)@j) & (FinalSignature(r, s, skS)@i & Check(true)@i)"
 
-/*
 lemma ValidSignature:
 	all-traces
-  "All r s pkS #i. FinalSignature(r, s, pkS)@i ==> verify(s, r, pkS) = true"
-*/
+  "All r s skS #i. FinalSignature(r, s, skS)@i & (s = sign{r}skS) ==> Check(true)@i"
 
+lemma SecretSigningKey:
+  all-traces
+  "All k #i. SecretSign(k)@i ==> (not(Ex #j. K(k)@j)) | (Ex B #j. Reveal(B)@j & Honest(B)@i)"
+
+lemma SecretSharedKey:
+  all-traces
+  "All k #i. SecretShared(k)@i ==> (not(Ex #j. K(k)@j)) | (Ex B #j. Reveal(B)@j & Honest(B)@i)"
 
 /*
  *

@@ -10,13 +10,19 @@ theory SignerInitialisation
 begin
 
 builtins: signing, hashing
+functions: 
+  extract/2
+equations: 
+  extract(sign{m}skS, pk(skS)) = m
 
+
+  
 // Public key infrastructure
 
 rule Register:
     [ Fr(~sk) ] 
   --> 
-    [ !SecretKey($A, ~sk), !PublicKey($A, pk(~sk)), Out(pk(~sk)) ]
+    [ !SecretKey($A, ~sk), !PublicKey($A, pk(~sk)) ]
 
 rule Reveal:
     [ !SecretKey(A, ltk) ]
@@ -24,110 +30,186 @@ rule Reveal:
     [ Out(ltk) ]
 
 rule Init_Config:
-	[ Fr(~N), Fr(~t)]
+    [ Fr(~N), Fr(~t)]
   -->
-  	[ !Config(~N, ~t) ]
+    [ !Config(~N, ~t) ]
 
 
 // Initialisation
 
 rule Init_Signer:
-	[ Fr(~id), !SecretKey($TPM, skTPM) ]
-  --[ Create($S, ~id, 'Signer') ]->
-	[ St_S_1($S, ~id, skTPM) ]
+	[ !SecretKey($TPM, skTPM) ]
+  --[ Create($S, skTPM, 'Signer') ]->
+	[ St_S_1($S, skTPM) ]
 
 rule Init_Verifier:
-	[ Fr(~id), !SecretKey($V, skV), !PublicKey($TPM, pkTPM), !Config(N, t) ]
-  --[ Create($V, ~id, 'Verifier'), TPM($V, pkTPM), ConfigFile(N, t), Verifier($V, pk(skV)) ]->
-	[ St_V_1($V, ~id, skV, pkTPM, <N, t>) ]
+	[ !SecretKey($V, skV), !PublicKey($TPM, pkTPM), !Config(N, t) ]
+  --[ Create($V, skV, 'Verifier'), TPM($V, pkTPM) ]->
+	[ St_V_1($V, skV, pkTPM, <N, t>) ]
 
 
 
 // Protocol
 
-rule Verifier_Send_1:
-	[ St_V_1($V, ~id, skV, pkTPM, <N, t>) ]
-  --[ Send($V, <pk(skV), <N, t>>) ]->
-  	[ St_V_2($V, ~id, skV, pkTPM, <N, t>), Out(<pk(skV), <N, t>>) ]
-
-rule Signer_Receive_1:
-	[ St_S_1($S, ~id, skTPM), In(<pkV, <N, t>>) ]
-  --[ Recv($S, <pkV, <N, t>>) ]->
-  	[ St_S_1($S, ~id, skTPM), GetInit_i(pkV, N, t) ]
-
-
-rule Signer_CHECK:
-	[ St_S_1($S, ~id, skTPM), GetInit_i(pkV_1, N, t), GetInit_i(pkV_2, N, t) ]
-  --[ AllDifferent(pkV_1, pkV_2) ]->
-  	[ St_S_2($S, ~id, skTPM, <pkV_1, pkV_2>, <N, t>) ]
+rule Verifier_Send_Init_1:
+  let
+  	C = <N, t>
+  	request = <C, pk(skV)>
+  in
+    [ St_V_1($V, skV, pk(skTPM), <N, t>) ]
+  --[ Send($V, request) ]->
+    [ St_V_2($V, skV, pk(skTPM), <N, t>), Out(request) ]
 
 
-rule Signer_OK:
-	[ St_S_2($S, ~id, skTPM, <pkV_1, pkV_2>, <N, t>) ]
-  --[ Send($S, 'ok') ]->
-  	[ St_S_3($S, ~id, skTPM, <pkV_1, pkV_2>, <N, t>), Out('ok') ]
+rule Signer_Receive_Init_1:
+    [ St_S_1($S, skTPM), In(<<N, t>, pkV>) ]
+  --[ Recv($S, <<N, t>, pkV>) ]->
+    [ St_S_2($S, skTPM, <pkV>, <N, t>) ]
+
+rule Signer_Receive_Init_2:
+    [ St_S_2($S, skTPM, <pkV1>, <N, t>), In(<<N, t>, pkV>) ]
+  --[ Recv($S, <<N, t>, pkV>), Diff(pkV1, pkV) ]->
+    [ St_S_3($S, skTPM, <pkV1, pkV>, <N, t>) ]
+
+rule Signer_Receive_Init_3:
+    [ St_S_3($S, skTPM, <pkV1, pkV2>, <N, t>), In(<<N, t>, pkV>) ]
+  --[ Recv($S, <<N, t>, pkV>), Diff(pkV1, pkV), Diff(pkV2, pkV) ]->
+    [ St_S_4($S, skTPM, <pkV1, pkV2, pkV>, <N, t>) ]
+
+
+
+rule Signer_Send_OK:
+  let
+    response = sign{'ok'}skTPM
+  in
+    [ St_S_4($S, skTPM, <pkV1, pkV2, pkV3>, <N, t>), !SecretKey($S, skS) ]
+  --[ Send($S, response), GenKey($S, skS) ]->
+    [ St_S_5($S, skTPM, <pkV1, pkV2, pkV3>, <N, t>, skS), Out(response) ]
+
+
+
+
+
+
+
+
 
 rule Verifier_Receive_OK:
-	[ St_V_2($V, ~id, skV, pkTPM, <N, t>), In('ok') ]
-  --[ Recv($V, 'ok') ]->
-  	[ St_V_3($V, ~id, skV, pkTPM, <N, t>) ]
+    [ St_V_2($V, skV, pk(skTPM), <N, t>), In(msg) ]
+  --[ Equal(verify(msg, 'ok', pk(skTPM)), true)]->
+    [ St_V_3($V, skV, pk(skTPM), <N, t>) ]
+
 
 
 rule Verifier_Send_Nonce:
-	[ St_V_3($V, ~id, skV, pkTPM, <N, t>), Fr(~nonce) ]
-  --[ Send($V, ~nonce) ]->
-  	[ St_V_4($V, ~id, skV, pkTPM, <N, t>, ~nonce), Out(~nonce) ]
-
-rule Signer_Receive_Nonce:
-	[ St_S_3($S, ~id, skTPM, <pkV_1, pkV_2>, <N, t>), In(n_i) ]
-  --[ Recv($S, n_i) ]->
-  	[ St_S_3($S, ~id, skTPM, <pkV_1, pkV_2>, <N, t>), Nonce(n_i) ]
+	let
+		toSend = sign{~nonce}skV
+	in
+    [ St_V_3($V, skV, pk(skTPM), <N, t>), Fr(~nonce) ]
+  --[ Send($V, toSend) ]->
+    [ St_V_4($V, skV, pk(skTPM), <N, t>, ~nonce), Out(toSend) ]
 
 
-rule Signer_Send_Final:
-	[ St_S_3($S, ~id, skTPM, <pkV_1, pkV_2>, <N, t>), Nonce(n1), !SecretKey($S, skS), Fr(~i) ]
-  --[ Send($S, <~i, <pkV_1, pkV_2>, pk(skS), sign{n1, h(<pk(skS), <pkV_1, pkV_2>, <N, t>>)}skTPM>), GenKey(pk(skS)) ]->
-  	[ St_S_4($S, ~id, skTPM, <pkV_1, pkV_2>, <N, t>, skS), Out(<~i, <pkV_1, pkV_2>, pk(skS), sign{n1, h(<pk(skS), <pkV_1, pkV_2>, <N, t>>)}skTPM>) ]
+
+
+rule Signer_Receive_Nonce_1:
+    [ St_S_5($S, skTPM, <pkV1, pkV2, pkV3>, <N, t>, skS), In(sign{nonce}skV) ]
+  --[ Recv($S, nonce), Included(pk(skV), <pkV1, pkV2, pkV3>) ]->
+    [ St_S_6($S, skTPM, <pkV1, pkV2, pkV3>, <pk(skV)>, <N, t>, skS, nonce) ]
+
+rule Signer_Send_Anwer_1:
+  let
+  	C = <N, t>
+  	lambda = <pkV1, pkV2, pkV3>
+  	M = h(pk(skS), C, lambda)
+  	signed = sign{~id, nonce, M}skTPM
+  	response = <lambda, pk(skS), signed>
+  in
+    [ St_S_6($S, skTPM, <pkV1, pkV2, pkV3>, <pk1>, <N, t>, skS, nonce), Fr(~id)]
+  --[ Send($S, response) ]->
+    [ St_S_7($S, skTPM, <pkV1, pkV2, pkV3>, <pk1>, <N, t>, skS), Out(response) ]
+
+
+
+rule Signer_Receive_Nonce_2:
+    [ St_S_7($S, skTPM, <pkV1, pkV2, pkV3>, <pk1>, <N, t>, skS), In(sign{nonce}skV) ]
+  --[ Recv($S, nonce), Included(pk(skV), <pkV1, pkV2, pkV3>), Diff(pk1, pk(skV)) ]->
+    [ St_S_8($S, skTPM, <pkV1, pkV2, pkV3>, <pk1, pk(skV)>, <N, t>, skS, nonce) ]
+
+rule Signer_Send_Anwer_2:
+  let
+    C = <N, t>
+    lambda = <pkV1, pkV2, pkV3>
+    M = h(pk(skS), C, lambda)
+    signed = sign{~id, nonce, M}skTPM
+    response = <lambda, pk(skS), signed>
+  in
+    [ St_S_8($S, skTPM, <pkV1, pkV2, pkV3>, <pk1, pk2>, <N, t>, skS, nonce), Fr(~id)]
+  --[ Send($S, response) ]->
+    [ St_S_9($S, skTPM, <pkV1, pkV2, pkV3>, <pk1, pk2>, <N, t>, skS), Out(response) ]
+
+
+
+
+rule Signer_Receive_Nonce_3:
+    [ St_S_9($S, skTPM, <pkV1, pkV2, pkV3>, <pk1, pk2>, <N, t>, skS), In(sign{nonce}skV) ]
+  --[ Recv($S, nonce), Included(pk(skV), <pkV1, pkV2, pkV3>), Diff(pk1, pk(skV)), Diff(pk2, pk(skV)) ]->
+    [ St_S_10($S, skTPM, <pkV1, pkV2, pkV3>, <pk1, pk2, pk(skV)>, <N, t>, skS, nonce) ]
+
+rule Signer_Send_Anwer_3:
+  let
+    C = <N, t>
+    lambda = <pkV1, pkV2, pkV3>
+    M = h(pk(skS), C, lambda)
+    signed = sign{~id, nonce, M}skTPM
+    response = <lambda, pk(skS), signed>
+  in
+    [ St_S_10($S, skTPM, <pkV1, pkV2, pkV3>, <pk1, pk2, pk3>, <N, t>, skS, nonce), Fr(~id)]
+  --[ Send($S, response) ]->
+    [ St_S_11($S, skTPM, <pkV1, pkV2, pkV3>, <N, t>, skS), Out(response) ]
+
+
 
 rule Verifier_Receive_Final:
-	[ St_V_4($V, ~id, skV, pkTPM, <N, t>, nonce), In(<i, <pkV_1, pkV_2>, pkS, sign{nonce, h(<pkS, <pkV_1, pkV_2>, <N, t>>)}skTPM>) ]
-  --[ Recv($V, <i, <pkV_1, pkV_2>, pkS, sign{nonce, h(<pkS, <pkV_1, pkV_2>, <N, t>>)}skTPM>), Finish($V, i, pkV_1, pkV_2, pkS) ]->
-  	[ St_V_5($V, ~id, skV, pkTPM, <N, t>, nonce, i, <pkV_1, pkV_2>, pkS) ]
+  let
+  	C = <N, t>
+    lambda = <pkV1, pkV2, pkV3>
+    signature = sign{id, nonce_new, h(pkS, C, lambda)}skTPM
+  in
+    [ St_V_4($V, skV, pk(skTPM), <N, t>, nonce), In(<lambda, pkS, signature>) ]
+  --[ Recv($V, <id, lambda, pkS, signature>), Equal(nonce, nonce_new), Included(pk(skV), <pkV1, pkV2, pkV3>), Finish(), FinishKey(pkS) ]->
+    [ St_V_5($V, skV, pk(skTPM), <N, t>, nonce, id, pkS, <pkV1, pkV2, pkV3>) ]
 
 
-// Security Properties
 
-lemma executeability:
+// properties
+
+lemma exists:
 	exists-trace
-		//"Ex N t #i #j. ConfigFile(N, t)@i & Finish(N, t)@j"
-		//"Ex pkS #i #j. GenKey(pkS)@i &Finish(pkS)@j"
-		/*
-		"Ex V1 V2 pk1 pk2 pkS id1 id2 #s #i #j #k #f.  GenKey(pkS)@s &
-													  Verifier(V1, pk1)@i &
-													  Verifier(V2, pk2)@j &
-													  not(pk1 = pk2) &
-													  not(#i = #j) &
-													  Finish(V1, id1, pk1, pk2, pkS)@f &
-													  Finish(V2, id2, pk1, pk2, pkS)@k &
-													  not(#f = #k) & 
-													  not(id1 = id2)"*/
-		"Ex V1 V2 pk1 pk2 pkS id1 id2 #s #k #f.  GenKey(pkS)@s &
-													  not(pk1 = pk2) &
-													  Finish(V1, id1, pk1, pk2, pkS)@f &
-													  Finish(V2, id2, pk1, pk2, pkS)@k &
-													  not(#f = #k) & 
-													  not(id1 = id2) &
-													  not(V1 = V2)"
+  "Ex #i #j #k. Finish()@i & Finish()@j & Finish()@k & not(#i = #j) & not(#i = #k) & not(#j = #k)"
 
-restriction all_different:
-	//" All p1 p2 p3 #i. AllDifferent(p1, p2, p3)@i ==> not(p1 = p2 | p1 = p3 | p2 = p3) "
-	" All p1 p2 #i. AllDifferent(p1, p2)@i ==> not(p1 = p2) "
+lemma realPubKey:
+  "All skS1 skS2 #a #b. FinishKey(pk(skS1))@a & FinishKey(pk(skS2))@b & not(#a = #b) ==> (pk(skS1) = pk(skS2) & (Ex S #c. Create(S, skS1, 'Signer')@c))"
 
-restriction same_tpm:
- 	" All V1 V2 tpm1 tpm2 #i #j. TPM(V1, tpm1)@i & TPM(V2, tpm2)@j & not(#i = #j) ==> tpm1 = tpm2 & not(V1 = V2)"
 
-restriction only_one_signer:
+
+
+// restrictions
+
+restriction Equal:
+  "All x y #i. Equal(x, y)@i ==> x = y"
+
+restriction Diff:
+	" All x y #i. Diff(x, y)@i ==> not(x = y) "
+
+restriction SameTPM:
+ 	" All V1 V2 tpm1 tpm2 #i #j. TPM(V1, tpm1)@i & TPM(V2, tpm2)@j & not(#i = #j) ==> tpm1 = tpm2 "
+
+restriction OnlyOneSigner:
 	" All S1 S2 id1 id2 #i #j. Create(S1, id1, 'Signer')@i& Create(S2, id2, 'Signer')@j ==> #i = #j "
+
+restriction Included:
+  " All p1 p2 p3 p4 #i. Included(p1, <p2, p3, p4>)@i ==> p1 = p2 | p1 = p3 | p1 = p4"
 
 
 end
