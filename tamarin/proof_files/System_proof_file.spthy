@@ -1,0 +1,320 @@
+theory System begin
+
+// Function signature and definition of the equational theory E
+
+functions: fst/1, h/1, pair/2, pk/1, sdec/2, senc/2, sign/2, snd/1,
+           true/0, verify/3
+equations:
+    fst(<x.1, x.2>) = x.1,
+    sdec(senc(x.1, x.2), x.2) = x.1,
+    snd(<x.1, x.2>) = x.2,
+    verify(sign(x.1, x.2), x.1, pk(x.2)) = true
+
+rule (modulo E) Register_PKI:
+   [ Fr( ~sk ) ]
+  -->
+   [ !SecretKey( $A, ~sk ), !PublicKey( $A, pk(~sk) ), Out( pk(~sk) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Register_Shared:
+   [ Fr( ~shared ) ] --> [ !SharedKey( $A, $B, ~shared ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal:
+   [ !SecretKey( A, sk ) ] --[ Reveal( A ) ]-> [ Out( sk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Init_Network:
+   [ !PublicKey( S, pkS ) ]
+  --[ Create( $N, 'Network' ), SignerKey( pkS ) ]->
+   [ St_N_1( $N, S, $V, pkS ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Init_Signee:
+   [ !PublicKey( S, pkS ), !SharedKey( S, V, shared ) ]
+  --[ Create( V, 'Signee' ), SignerKey( pkS ) ]->
+   [ St_V_1( V, S, pkS, shared ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Init_Signer:
+   [ !SecretKey( S, skS ), !SharedKey( S, V, shared ) ]
+  --[ CreateSigner( S, skS, 'Signer' ) ]->
+   [ St_S_1( S, V, skS, shared ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Network_Send_1:
+   [ St_N_1( $N, S, $V, pk(skS) ), Fr( ~data ), Fr( ~from ), Fr( ~to )
+   ]
+  --[ Send( $N, <~data, ~from, ~to> ) ]->
+   [
+   St_N_2( $N, S, $V, pk(skS), <~data, ~from, ~to> ),
+   Out( <~data, ~from, ~to> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Signee_Send_1:
+   [ St_V_1( V, S, pk(skS), shared ), In( <data, from, to> ) ]
+  --[ Recv( V, <data, from, to> ) ]->
+   [
+   St_V_2( V, S, pk(skS), shared, h(<data, from, to>) ),
+   Out( <h(<data, from, to>), <data, from, to>, 
+         senc(<h(<data, from, to>), data, from, to>, shared)>
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Signer_Receive_2:
+   [
+   St_S_1( S, V, skS, shared ),
+   In( <some_id, some_assertion, some_mac> )
+   ]
+  --[
+  Recv( S, <some_id, some_assertion, some_mac> ),
+  Equal( senc(<some_id, some_assertion>, shared), some_mac )
+  ]->
+   [ St_S_2( S, V, skS, shared ), ToSign( some_id, some_assertion ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Signer_Send_3:
+   [ St_S_2( S, V, skS, shared ), ToSign( id, assertion ) ]
+  --[
+  Send( S, <id, assertion, sign(assertion, skS)> ),
+  SecretSign( skS ), SecretShared( shared ), Honest( S ), Honest( V )
+  ]->
+   [
+   St_S_3( S, V, skS, shared ),
+   Out( <id, assertion, sign(assertion, skS)> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Signee_Receive_3:
+   [
+   St_V_2( V, S, pk(skS), shared, id ),
+   In( <some_id, some_assertion, some_signature> )
+   ]
+  --[
+  Recv( V, <some_id, some_assertion, some_signature> ),
+  Equal( sign(some_assertion, skS), some_signature ),
+  Equal( id, some_id )
+  ]->
+   [
+   St_V_3( V, S, pk(skS), shared ),
+   Resonse( <some_assertion, some_signature> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Signee_Send_4:
+   [
+   St_V_3( V, S, pk(skS), shared ), Resonse( <assertion, signature> ),
+   Fr( ~tag )
+   ]
+  --[ Send( V, <assertion, signature> ), FinishSignee( ~tag ) ]->
+   [
+   St_V_4( V, S, pk(skS), shared ),
+   Out( <~tag, assertion, signature> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Network_Receive_4:
+   [
+   St_N_2( $N, S, $V, pk(skS), request ),
+   In( <tag, assertion, signature> )
+   ]
+  --[
+  Recv( $N, <assertion, signature> ), Equal( request, assertion ),
+  Finish( tag ), FinalSignature( request, signature, skS ),
+  Check( verify(signature, request, pk(skS)) )
+  ]->
+   [ St_N_3( $N, S, $V, pk(skS), request, signature ) ]
+
+  /*
+  rule (modulo AC) Network_Receive_4:
+     [
+     St_N_2( $N, S, $V, pk(skS), request ),
+     In( <tag, assertion, signature> )
+     ]
+    --[
+    Recv( $N, <assertion, signature> ), Equal( request, assertion ),
+    Finish( tag ), FinalSignature( request, signature, skS ),
+    Check( z )
+    ]->
+     [ St_N_3( $N, S, $V, pk(skS), request, signature ) ]
+    variants (modulo AC)
+    1. request
+             = request.10
+       signature
+             = signature.10
+       skS   = skS.10
+       z     = verify(signature.10, request.10, pk(skS.10))
+    
+    2. request
+             = x.10
+       signature
+             = sign(x.10, x.11)
+       skS   = x.11
+       z     = true
+  */
+
+lemma exists:
+  exists-trace
+  "∃ r s skS tag #i #k.
+    ((((FinishSignee( tag ) @ #k) ∧ (Finish( tag ) @ #i)) ∧
+      (#k < #i)) ∧
+     (¬(∃ B #j. Reveal( B ) @ #j))) ∧
+    ((FinalSignature( r, s, skS ) @ #i) ∧ (Check( true ) @ #i))"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ r s skS tag #i #k.
+  (FinishSignee( tag ) @ #k) ∧
+  (Finish( tag ) @ #i) ∧
+  (FinalSignature( r, s, skS ) @ #i) ∧
+  (Check( true ) @ #i)
+ ∧
+  (#k < #i) ∧ (∀ B #j. (Reveal( B ) @ #j) ⇒ ⊥)"
+*/
+simplify
+solve( St_N_2( $N, S, $V, pk(skS), r ) ▶₀ #i )
+  case Network_Send_1
+  solve( St_V_3( V.1, S, pk(skS), shared ) ▶₀ #k )
+    case Signee_Receive_3
+    solve( Resonse( <assertion, signature> ) ▶₁ #k )
+      case Signee_Receive_3
+      solve( !SecretKey( S, ~sk ) ▶₀ #m )
+        case Register_PKI
+        solve( !SharedKey( $A, V.1, shared.1 ) ▶₁ #m )
+          case Register_Shared
+          solve( !KU( sign(<~data, ~from, ~to>, ~sk) ) @ #vk.4 )
+            case Signer_Send_3
+            solve( !KU( sign(assertion, ~sk) ) @ #vk.14 )
+              case Signer_Send_3
+              solve( !KU( senc(<id, ~data, ~from, ~to>, ~shared.1) ) @ #vk.19 )
+                case Signee_Send_1
+                solve( !KU( ~tag ) @ #vk.5 )
+                  case Signee_Send_4
+                  solve( !KU( ~data ) @ #vk.9 )
+                    case Network_Send_1
+                    solve( !KU( ~from ) @ #vk.11 )
+                      case Network_Send_1
+                      solve( !KU( ~to ) @ #vk.12 )
+                        case Network_Send_1
+                        solve( !KU( h(<~data, ~from, ~to>) ) @ #vk.13 )
+                          case Signee_Send_1_case_1
+                          SOLVED // trace found
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma ValidSignature:
+  all-traces
+  "∀ r s skS #i.
+    ((FinalSignature( r, s, skS ) @ #i) ∧ (s = sign(r, skS))) ⇒
+    (Check( true ) @ #i)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ r s skS #i.
+  (FinalSignature( r, s, skS ) @ #i) ∧ (s = sign(r, skS))
+ ∧
+  ¬(Check( true ) @ #i)"
+*/
+simplify
+by contradiction /* from formulas */
+
+lemma SecretSigningKey:
+  all-traces
+  "∀ k #i.
+    (SecretSign( k ) @ #i) ⇒
+    ((¬(∃ #j. K( k ) @ #j)) ∨
+     (∃ B #j. (Reveal( B ) @ #j) ∧ (Honest( B ) @ #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ k #i.
+  (SecretSign( k ) @ #i)
+ ∧
+  (∃ #j. (K( k ) @ #j)) ∧
+  (∀ B #j. (Reveal( B ) @ #j) ∧ (Honest( B ) @ #i) ⇒ ⊥)"
+*/
+simplify
+solve( St_S_2( S, V, k, shared ) ▶₀ #i )
+  case Signer_Receive_2
+  solve( ToSign( id, assertion ) ▶₁ #i )
+    case Signer_Receive_2
+    solve( !KU( ~sk ) @ #vk )
+      case Reveal
+      by contradiction /* from formulas */
+    qed
+  qed
+qed
+
+lemma SecretSharedKey:
+  all-traces
+  "∀ k #i.
+    (SecretShared( k ) @ #i) ⇒
+    ((¬(∃ #j. K( k ) @ #j)) ∨
+     (∃ B #j. (Reveal( B ) @ #j) ∧ (Honest( B ) @ #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ k #i.
+  (SecretShared( k ) @ #i)
+ ∧
+  (∃ #j. (K( k ) @ #j)) ∧
+  (∀ B #j. (Reveal( B ) @ #j) ∧ (Honest( B ) @ #i) ⇒ ⊥)"
+*/
+simplify
+solve( St_S_2( S, V, skS, k ) ▶₀ #i )
+  case Signer_Receive_2
+  solve( ToSign( id, assertion ) ▶₁ #i )
+    case Signer_Receive_2
+    by solve( !KU( ~shared ) @ #vk )
+  qed
+qed
+
+restriction Equal:
+  "∀ x y #i. (Equal( x, y ) @ #i) ⇒ (x = y)"
+  // safety formula
+
+restriction OnlyOneSigner:
+  "∀ S1 S2 k1 k2 #i #j.
+    ((CreateSigner( S1, k1, 'Signer' ) @ #i) ∧
+     (CreateSigner( S2, k2, 'Signer' ) @ #j)) ⇒
+    (#i = #j)"
+  // safety formula
+
+restriction OnlyOneSignee:
+  "∀ S1 S2 #i #j.
+    ((Create( S1, 'Signee' ) @ #i) ∧ (Create( S2, 'Signee' ) @ #j)) ⇒
+    (#i = #j)"
+  // safety formula
+
+restriction SameSignerPublic:
+  "∀ k1 k2 #i #j.
+    (((SignerKey( k1 ) @ #i) ∧ (SignerKey( k2 ) @ #j)) ∧
+     (¬(#i = #j))) ⇒
+    ((k1 = k2) ∧
+     (∃ k S #m. (CreateSigner( S, k, 'Signer' ) @ #m) ∧ (k1 = pk(k))))"
+
+/* All well-formedness checks were successful. */
+
+end

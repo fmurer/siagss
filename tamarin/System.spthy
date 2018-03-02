@@ -102,16 +102,16 @@ rule Signee_Receive_3:
 
 rule Signee_Send_4:
   let
-  	answer = <assertion, signature>
+  	answer = <~tag, assertion, signature>
   in
-    [ St_V_3(V, S, pk(skS), shared), Resonse(<assertion, signature>) ]
-  --[ Send(V, <assertion, signature>), FinishSignee() ]->
+    [ St_V_3(V, S, pk(skS), shared), Resonse(<assertion, signature>), Fr(~tag) ]
+  --[ Send(V, <assertion, signature>), FinishSignee(~tag) ]->
     [ St_V_4(V, S, pk(skS), shared), Out(answer) ]
 
 
 rule Network_Receive_4:
-    [ St_N_2($N, S, $V, pk(skS), request), In(<assertion, signature>) ]
-  --[ Recv($N, <assertion, signature>), Equal(request, assertion), Finish(), FinalSignature(request, signature, skS), Check(verify(signature, request, pk(skS))) ]->
+    [ St_N_2($N, S, $V, pk(skS), request), In(<tag, assertion, signature>) ]
+  --[ Recv($N, <assertion, signature>), Equal(request, assertion), Finish(tag), FinalSignature(request, signature, skS), Check(verify(signature, request, pk(skS))) ]->
     [ St_N_3($N, S, $V, pk(skS), request, signature) ]
 
 /*
@@ -122,7 +122,7 @@ rule Network_Receive_4:
 
 lemma exists:
   exists-trace
-  "Ex r s skS #i #k. FinishSignee()@k & Finish()@i & #k < #i & not(Ex B #j. Reveal(B)@j) & (FinalSignature(r, s, skS)@i & Check(true)@i)"
+  "Ex r s skS tag #i #k. FinishSignee(tag)@k & Finish(tag)@i & #k < #i & not(Ex B #j. Reveal(B)@j) & (FinalSignature(r, s, skS)@i & Check(true)@i)"
 
 lemma ValidSignature:
 	all-traces

@@ -1,0 +1,1274 @@
+theory KeyReplication begin
+
+// Function signature and definition of the equational theory E
+
+functions: adec/2, aenc/2, fst/1, pair/2, pk/1, sign/2, snd/1,
+           true/0, verify/3
+equations:
+    adec(aenc(x.1, pk(x.2)), x.2) = x.1,
+    fst(<x.1, x.2>) = x.1,
+    snd(<x.1, x.2>) = x.2,
+    verify(sign(x.1, x.2), x.1, pk(x.2)) = true
+
+rule (modulo E) Register:
+   [ Fr( ~sk ) ]
+  -->
+   [ !SecretKey( $A, ~sk ), !PublicKey( $A, pk(~sk) ), Out( pk(~sk) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal:
+   [ !SecretKey( A, ltk ) ] --[ Reveal( pk(ltk) ) ]-> [ Out( ltk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Init_Replication:
+   [
+   !SecretKey( $R, skR ), !PublicKey( $V1, pkV1 ),
+   !PublicKey( $V2, pkV2 ), !PublicKey( $V3, pkV3 )
+   ]
+  --[
+  Create( $R, skR, 'Replication' ), SK( skR ),
+  AllDiff( pk(skR), pkV1, pkV2, pkV3 ),
+  VerifierKeys( pkV1, pkV2, pkV3 )
+  ]->
+   [ St_R_1( $R, $S, skR, <pkV1, pkV2, pkV3> ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Init_Verifier:
+   [
+   !SecretKey( $V, skV ), !PublicKey( $S, pkS ),
+   !PublicKey( $R, pkR ), Fr( ~id )
+   ]
+  --[
+  Create( $V, skV, 'Verifier' ), SK( skV ),
+  ReplicationPublicKey( pkR ), SignerPublicKey( pkS )
+  ]->
+   [ St_V_1( $V, skV, pkS, pkR, ~id ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Init_Signer:
+   [
+   !SecretKey( $S, skS ), !PublicKey( $V1, pkV1 ),
+   !PublicKey( $V2, pkV2 ), !PublicKey( $V3, pkV3 )
+   ]
+  --[
+  Create( $S, skS, 'Signer' ), SK( skS ),
+  VerifExist( pkV1, pkV2, pkV3 ),
+  AllDiff( pk(skS), pkV1, pkV2, pkV3 ),
+  VerifierKeys( pkV1, pkV2, pkV3 )
+  ]->
+   [ St_S_1( $S, skS, <pkV1, pkV2, pkV3> ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Verifier_Send_1:
+   [ St_V_1( $V, skV, pk(skS), pk(skR), id ) ]
+  --[ Send( $V, sign(<pk(skR), id>, skV) ) ]->
+   [
+   St_V_2( $V, skV, pk(skS), pk(skR), id ),
+   Out( sign(<pk(skR), id>, skV) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Signer_Check:
+   [
+   St_S_1( $S, skS, <pkV1, pkV2, pkV3> ),
+   In( sign(<pkR, id1>, skV1) ), In( sign(<pkR, id2>, skV2) )
+   ]
+  --[
+  Diff( id1, id2 ), Diff( skV1, skV2 ), Diff( pkR, pkV1 ),
+  Diff( pkR, pkV2 ), Diff( pkR, pkV3 ),
+  Included( pk(skV1), <pkV1, pkV2, pkV3> ),
+  Included( pk(skV2), <pkV1, pkV2, pkV3> )
+  ]->
+   [ St_S_2( $S, skS, <pkV1, pkV2, pkV3>, pkR ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Signer_Send_3:
+   [ St_S_2( $S, skS, <pkV1, pkV2, pkV3>, pkR ) ]
+  --[
+  Send( $S, sign(<pk(skS), aenc(skS, pkR)>, skS) ), Secret( skS ),
+  Honest( pk(skS) ), Honest( pkR ), Honest( pkV1 ), Honest( pkV2 ),
+  Honest( pkV3 )
+  ]->
+   [
+   St_S_3( $S, skS, <pkV1, pkV2, pkV3>, pkR ),
+   Out( sign(<pk(skS), aenc(skS, pkR)>, skS) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Verifier_Check:
+   [
+   St_V_2( $V, skV, pk(skS), pk(skR), id ),
+   In( sign(<pk(skS), enc>, skS) )
+   ]
+  -->
+   [ St_V_3( $V, skV, pk(skS), pk(skR), id, enc ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Verifier_Send_5:
+   [ St_V_3( $V, skV, pk(skS), pk(skR), id, enc ) ]
+  --[ Send( $V, sign(<pk(skS), enc>, skV) ) ]->
+   [
+   St_V_4( $V, skV, pk(skS), pk(skR), id ),
+   Out( sign(<pk(skS), enc>, skV) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Replication_Check:
+   [
+   St_R_1( $R, $S, skR, <pkV1, pkV2, pkV3> ),
+   In( sign(<pkS, aenc(skS, pk(skR))>, skV1) ),
+   In( sign(<pkS, aenc(skS, pk(skR))>, skV2) )
+   ]
+  --[
+  Diff( skV1, skV2 ), Included( pk(skV1), <pkV1, pkV2, pkV3> ),
+  Included( pk(skV2), <pkV1, pkV2, pkV3> ), Finish( ), Secret( skS ),
+  Honest( pk(skR) ), Honest( pkS ), Honest( pkV1 ), Honest( pkV2 ),
+  Honest( pkV3 )
+  ]->
+   [ St_R_2( $R, $S, skR, <pkV1, pkV2, pkV3>, pkS, skS ) ]
+
+  /* has exactly the trivial AC variant */
+
+lemma executeability:
+  exists-trace
+  "∃ #i. (Finish( ) @ #i) ∧ (¬(∃ B #j. Reveal( B ) @ #j))"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ #i. (Finish( ) @ #i) ∧ ∀ B #j. (Reveal( B ) @ #j) ⇒ ⊥"
+*/
+simplify
+solve( (pk(skV1) = pkV1)  ∥ (pk(skV1) = pkV2)  ∥
+       (pk(skV1) = pkV3) )
+  case case_1
+  solve( (pk(skV2) = pk(skV1))  ∥ (pk(skV2) = pkV2)  ∥
+         (pk(skV2) = pkV3) )
+    case case_2
+    solve( St_R_1( $R, $S, skR, <pk(skV1), pk(skV2), pkV3> ) ▶₀ #i )
+      case Init_Replication
+      solve( !KU( sign(<pkS, aenc(skS, pk(~sk))>, ~sk.1) ) @ #vk )
+        case Verifier_Send_5
+        solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+          case Init_Replication
+          solve( Create( R.1, ~sk.4, 'Signer' ) @ #j )
+            case Init_Signer
+            solve( !SecretKey( $S.1, ~sk.4 ) ▶₀ #j )
+              case Register
+              solve( !PublicKey( $V1, pk(~sk.1) ) ▶₁ #j )
+                case Register
+                solve( !PublicKey( $V2, pk(~sk.2) ) ▶₂ #j )
+                  case Register
+                  solve( !PublicKey( $V3, pk(~sk.3) ) ▶₃ #j )
+                    case Register
+                    solve( !KU( sign(<pk(~sk.4), aenc(skS, pk(~sk))>, ~sk.2)
+                           ) @ #vk.1 )
+                      case Verifier_Send_5
+                      solve( (#vr.8 = #vr.13)  ∥ ((¬($V1 = $V2)) ∧ (¬(~sk.1 = ~sk.2))) )
+                        case case_2
+                        solve( (#vr.13 = #vr.8)  ∥ ((¬($V2 = $V1)) ∧ (¬(~sk.2 = ~sk.1))) )
+                          case case_2
+                          solve( (#vr.8 = #vr.13)  ∥ (¬(~sk.1 = ~sk.2)) )
+                            case case_2
+                            solve( (#vr.13 = #vr.8)  ∥ (¬(~sk.2 = ~sk.1)) )
+                              case case_2
+                              solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+                                case Init_Replication
+                                solve( !KU( sign(<pk(~sk.4), aenc(skS, pk(~sk))>, ~sk.4)
+                                       ) @ #vk.2 )
+                                  case Signer_Send_3
+                                  solve( (pk(skV1) = pk(~sk.1))  ∥ (pk(skV1) = pk(~sk.2))  ∥
+                                         (pk(skV1) = pk(~sk.3)) )
+                                    case case_1
+                                    solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                           (pk(skV2) = pk(~sk.3)) )
+                                      case case_2
+                                      solve( !KU( sign(<pk(~sk), id1>, ~sk.1) ) @ #vk.3 )
+                                        case Verifier_Send_1
+                                        solve( Create( R.1, ~sk.4, 'Signer' ) @ #j )
+                                          case Init_Signer
+                                          solve( !KU( sign(<pk(~sk), id2>, ~sk.2) ) @ #vk.4 )
+                                            case Verifier_Send_1
+                                            solve( Create( R.1, ~sk.4, 'Signer' ) @ #j )
+                                              case Init_Signer
+                                              SOLVED // trace found
+                                            qed
+                                          qed
+                                        qed
+                                      qed
+                                    qed
+                                  qed
+                                qed
+                              qed
+                            qed
+                          qed
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma SecretSigningKey:
+  all-traces
+  "∀ k #i.
+    (Secret( k ) @ #i) ⇒
+    ((¬(∃ #j. K( k ) @ #j)) ∨
+     (∃ B #j. (Reveal( B ) @ #j) ∧ (Honest( B ) @ #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ k #i.
+  (Secret( k ) @ #i)
+ ∧
+  (∃ #j. (K( k ) @ #j)) ∧
+  (∀ B #j. (Reveal( B ) @ #j) ∧ (Honest( B ) @ #i) ⇒ ⊥)"
+*/
+simplify
+solve( Secret( k ) @ #i )
+  case Replication_Check
+  solve( (pk(skV1) = pkV1)  ∥ (pk(skV1) = pkV2)  ∥
+         (pk(skV1) = pkV3) )
+    case case_1
+    solve( (pk(skV2) = pk(skV1))  ∥ (pk(skV2) = pkV2)  ∥
+           (pk(skV2) = pkV3) )
+      case case_1
+      by contradiction /* from formulas */
+    next
+      case case_2
+      solve( St_R_1( $R, $S, skR, <pk(skV1), pk(skV2), pkV3> ) ▶₀ #i )
+        case Init_Replication
+        solve( !KU( sign(<pkS, aenc(k, pk(~sk))>, ~sk.1) ) @ #vk.1 )
+          case Signer_Send_3
+          by contradiction /* from formulas */
+        next
+          case Verifier_Send_5
+          solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+            case Init_Replication
+            solve( Create( R.1, ~sk.4, 'Signer' ) @ #j.1 )
+              case Init_Signer
+              solve( !SecretKey( $S.1, ~sk.4 ) ▶₀ #j.1 )
+                case Register
+                solve( !PublicKey( $V1.1, pk(~sk.1) ) ▶₁ #j.1 )
+                  case Register
+                  solve( !PublicKey( $V2.1, pk(~sk.2) ) ▶₂ #j.1 )
+                    case Register
+                    solve( !PublicKey( $V3.1, pk(~sk.3) ) ▶₃ #j.1 )
+                      case Register
+                      solve( !KU( sign(<pk(~sk.4), aenc(k, pk(~sk))>, ~sk.2) ) @ #vk.2 )
+                        case Signer_Send_3
+                        by contradiction /* from formulas */
+                      next
+                        case Verifier_Send_5
+                        solve( (#vr.8 = #vr.13)  ∥ ((¬($V1 = $V2)) ∧ (¬(~sk.1 = ~sk.2))) )
+                          case case_1
+                          by contradiction /* from formulas */
+                        next
+                          case case_2
+                          solve( (#vr.13 = #vr.8)  ∥ ((¬($V2 = $V1)) ∧ (¬(~sk.2 = ~sk.1))) )
+                            case case_1
+                            by contradiction /* from formulas */
+                          next
+                            case case_2
+                            solve( (#vr.8 = #vr.13)  ∥ (¬(~sk.1 = ~sk.2)) )
+                              case case_1
+                              by contradiction /* from formulas */
+                            next
+                              case case_2
+                              solve( (#vr.13 = #vr.8)  ∥ (¬(~sk.2 = ~sk.1)) )
+                                case case_1
+                                by contradiction /* from formulas */
+                              next
+                                case case_2
+                                solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+                                  case Init_Replication
+                                  solve( !KU( sign(<pk(~sk.4), aenc(k, pk(~sk))>, ~sk.4) ) @ #vk.3 )
+                                    case Signer_Send_3
+                                    solve( (pk(skV1) = pk(~sk.1))  ∥ (pk(skV1) = pk(~sk.2))  ∥
+                                           (pk(skV1) = pk(~sk.3)) )
+                                      case case_1
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        by contradiction /* from formulas */
+                                      next
+                                        case case_2
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_3
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      qed
+                                    next
+                                      case case_2
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_2
+                                        by contradiction /* from formulas */
+                                      next
+                                        case case_3
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      qed
+                                    next
+                                      case case_3
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_2
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_3
+                                        by contradiction /* from formulas */
+                                      qed
+                                    qed
+                                  next
+                                    case Verifier_Send_5
+                                    by contradiction /* cyclic */
+                                  next
+                                    case c_sign
+                                    solve( !KU( ~sk.4 ) @ #vk.5 )
+                                      case Reveal
+                                      by contradiction /* from formulas */
+                                    qed
+                                  qed
+                                qed
+                              qed
+                            qed
+                          qed
+                        qed
+                      next
+                        case c_sign
+                        solve( !KU( ~sk.2 ) @ #vk.5 )
+                          case Reveal
+                          by contradiction /* from formulas */
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        next
+          case c_sign
+          solve( !KU( ~sk.1 ) @ #vk.4 )
+            case Reveal
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    next
+      case case_3
+      solve( St_R_1( $R, $S, skR, <pk(skV1), pkV2, pk(skV2)> ) ▶₀ #i )
+        case Init_Replication
+        solve( !KU( sign(<pkS, aenc(k, pk(~sk))>, ~sk.1) ) @ #vk.1 )
+          case Signer_Send_3
+          by contradiction /* from formulas */
+        next
+          case Verifier_Send_5
+          solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+            case Init_Replication
+            solve( Create( R.1, ~sk.4, 'Signer' ) @ #j.1 )
+              case Init_Signer
+              solve( !SecretKey( $S.1, ~sk.4 ) ▶₀ #j.1 )
+                case Register
+                solve( !PublicKey( $V1.1, pk(~sk.1) ) ▶₁ #j.1 )
+                  case Register
+                  solve( !PublicKey( $V2.1, pk(~sk.2) ) ▶₂ #j.1 )
+                    case Register
+                    solve( !PublicKey( $V3.1, pk(~sk.3) ) ▶₃ #j.1 )
+                      case Register
+                      solve( !KU( sign(<pk(~sk.4), aenc(k, pk(~sk))>, ~sk.3) ) @ #vk.2 )
+                        case Signer_Send_3
+                        by contradiction /* from formulas */
+                      next
+                        case Verifier_Send_5
+                        solve( (#vr.8 = #vr.13)  ∥ ((¬($V1 = $V3)) ∧ (¬(~sk.1 = ~sk.3))) )
+                          case case_1
+                          by contradiction /* from formulas */
+                        next
+                          case case_2
+                          solve( (#vr.13 = #vr.8)  ∥ ((¬($V3 = $V1)) ∧ (¬(~sk.3 = ~sk.1))) )
+                            case case_1
+                            by contradiction /* from formulas */
+                          next
+                            case case_2
+                            solve( (#vr.8 = #vr.13)  ∥ (¬(~sk.1 = ~sk.3)) )
+                              case case_1
+                              by contradiction /* from formulas */
+                            next
+                              case case_2
+                              solve( (#vr.13 = #vr.8)  ∥ (¬(~sk.3 = ~sk.1)) )
+                                case case_1
+                                by contradiction /* from formulas */
+                              next
+                                case case_2
+                                solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+                                  case Init_Replication
+                                  solve( !KU( sign(<pk(~sk.4), aenc(k, pk(~sk))>, ~sk.4) ) @ #vk.3 )
+                                    case Signer_Send_3
+                                    solve( (pk(skV1) = pk(~sk.1))  ∥ (pk(skV1) = pk(~sk.2))  ∥
+                                           (pk(skV1) = pk(~sk.3)) )
+                                      case case_1
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        by contradiction /* from formulas */
+                                      next
+                                        case case_2
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_3
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      qed
+                                    next
+                                      case case_2
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_2
+                                        by contradiction /* from formulas */
+                                      next
+                                        case case_3
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      qed
+                                    next
+                                      case case_3
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_2
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_3
+                                        by contradiction /* from formulas */
+                                      qed
+                                    qed
+                                  next
+                                    case Verifier_Send_5
+                                    by contradiction /* cyclic */
+                                  next
+                                    case c_sign
+                                    solve( !KU( ~sk.4 ) @ #vk.5 )
+                                      case Reveal
+                                      by contradiction /* from formulas */
+                                    qed
+                                  qed
+                                qed
+                              qed
+                            qed
+                          qed
+                        qed
+                      next
+                        case c_sign
+                        solve( !KU( ~sk.3 ) @ #vk.5 )
+                          case Reveal
+                          by contradiction /* from formulas */
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        next
+          case c_sign
+          solve( !KU( ~sk.1 ) @ #vk.4 )
+            case Reveal
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    qed
+  next
+    case case_2
+    solve( (pk(skV2) = pkV1)  ∥ (pk(skV2) = pk(skV1))  ∥
+           (pk(skV2) = pkV3) )
+      case case_1
+      solve( St_R_1( $R, $S, skR, <pk(skV2), pk(skV1), pkV3> ) ▶₀ #i )
+        case Init_Replication
+        solve( !KU( sign(<pkS, aenc(k, pk(~sk))>, ~sk.2) ) @ #vk.1 )
+          case Signer_Send_3
+          by contradiction /* from formulas */
+        next
+          case Verifier_Send_5
+          solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+            case Init_Replication
+            solve( Create( R.1, ~sk.4, 'Signer' ) @ #j.1 )
+              case Init_Signer
+              solve( !SecretKey( $S.1, ~sk.4 ) ▶₀ #j.1 )
+                case Register
+                solve( !PublicKey( $V1.1, pk(~sk.1) ) ▶₁ #j.1 )
+                  case Register
+                  solve( !PublicKey( $V2.1, pk(~sk.2) ) ▶₂ #j.1 )
+                    case Register
+                    solve( !PublicKey( $V3.1, pk(~sk.3) ) ▶₃ #j.1 )
+                      case Register
+                      solve( !KU( sign(<pk(~sk.4), aenc(k, pk(~sk))>, ~sk.1) ) @ #vk.2 )
+                        case Signer_Send_3
+                        by contradiction /* from formulas */
+                      next
+                        case Verifier_Send_5
+                        solve( (#vr.8 = #vr.13)  ∥ ((¬($V2 = $V1)) ∧ (¬(~sk.2 = ~sk.1))) )
+                          case case_1
+                          by contradiction /* from formulas */
+                        next
+                          case case_2
+                          solve( (#vr.13 = #vr.8)  ∥ ((¬($V1 = $V2)) ∧ (¬(~sk.1 = ~sk.2))) )
+                            case case_1
+                            by contradiction /* from formulas */
+                          next
+                            case case_2
+                            solve( (#vr.8 = #vr.13)  ∥ (¬(~sk.2 = ~sk.1)) )
+                              case case_1
+                              by contradiction /* from formulas */
+                            next
+                              case case_2
+                              solve( (#vr.13 = #vr.8)  ∥ (¬(~sk.1 = ~sk.2)) )
+                                case case_1
+                                by contradiction /* from formulas */
+                              next
+                                case case_2
+                                solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+                                  case Init_Replication
+                                  solve( !KU( sign(<pk(~sk.4), aenc(k, pk(~sk))>, ~sk.4) ) @ #vk.3 )
+                                    case Signer_Send_3
+                                    solve( (pk(skV1) = pk(~sk.1))  ∥ (pk(skV1) = pk(~sk.2))  ∥
+                                           (pk(skV1) = pk(~sk.3)) )
+                                      case case_1
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        by contradiction /* from formulas */
+                                      next
+                                        case case_2
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_3
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      qed
+                                    next
+                                      case case_2
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_2
+                                        by contradiction /* from formulas */
+                                      next
+                                        case case_3
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      qed
+                                    next
+                                      case case_3
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_2
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_3
+                                        by contradiction /* from formulas */
+                                      qed
+                                    qed
+                                  next
+                                    case Verifier_Send_5
+                                    by contradiction /* cyclic */
+                                  next
+                                    case c_sign
+                                    solve( !KU( ~sk.4 ) @ #vk.5 )
+                                      case Reveal
+                                      by contradiction /* from formulas */
+                                    qed
+                                  qed
+                                qed
+                              qed
+                            qed
+                          qed
+                        qed
+                      next
+                        case c_sign
+                        solve( !KU( ~sk.1 ) @ #vk.5 )
+                          case Reveal
+                          by contradiction /* from formulas */
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        next
+          case c_sign
+          solve( !KU( ~sk.2 ) @ #vk.4 )
+            case Reveal
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    next
+      case case_2
+      by contradiction /* from formulas */
+    next
+      case case_3
+      solve( St_R_1( $R, $S, skR, <pkV1, pk(skV1), pk(skV2)> ) ▶₀ #i )
+        case Init_Replication
+        solve( !KU( sign(<pkS, aenc(k, pk(~sk))>, ~sk.2) ) @ #vk.1 )
+          case Signer_Send_3
+          by contradiction /* from formulas */
+        next
+          case Verifier_Send_5
+          solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+            case Init_Replication
+            solve( Create( R.1, ~sk.4, 'Signer' ) @ #j.1 )
+              case Init_Signer
+              solve( !SecretKey( $S.1, ~sk.4 ) ▶₀ #j.1 )
+                case Register
+                solve( !PublicKey( $V1.1, pk(~sk.1) ) ▶₁ #j.1 )
+                  case Register
+                  solve( !PublicKey( $V2.1, pk(~sk.2) ) ▶₂ #j.1 )
+                    case Register
+                    solve( !PublicKey( $V3.1, pk(~sk.3) ) ▶₃ #j.1 )
+                      case Register
+                      solve( !KU( sign(<pk(~sk.4), aenc(k, pk(~sk))>, ~sk.3) ) @ #vk.2 )
+                        case Signer_Send_3
+                        by contradiction /* from formulas */
+                      next
+                        case Verifier_Send_5
+                        solve( (#vr.8 = #vr.13)  ∥ ((¬($V2 = $V3)) ∧ (¬(~sk.2 = ~sk.3))) )
+                          case case_1
+                          by contradiction /* from formulas */
+                        next
+                          case case_2
+                          solve( (#vr.13 = #vr.8)  ∥ ((¬($V3 = $V2)) ∧ (¬(~sk.3 = ~sk.2))) )
+                            case case_1
+                            by contradiction /* from formulas */
+                          next
+                            case case_2
+                            solve( (#vr.8 = #vr.13)  ∥ (¬(~sk.2 = ~sk.3)) )
+                              case case_1
+                              by contradiction /* from formulas */
+                            next
+                              case case_2
+                              solve( (#vr.13 = #vr.8)  ∥ (¬(~sk.3 = ~sk.2)) )
+                                case case_1
+                                by contradiction /* from formulas */
+                              next
+                                case case_2
+                                solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+                                  case Init_Replication
+                                  solve( !KU( sign(<pk(~sk.4), aenc(k, pk(~sk))>, ~sk.4) ) @ #vk.3 )
+                                    case Signer_Send_3
+                                    solve( (pk(skV1) = pk(~sk.1))  ∥ (pk(skV1) = pk(~sk.2))  ∥
+                                           (pk(skV1) = pk(~sk.3)) )
+                                      case case_1
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        by contradiction /* from formulas */
+                                      next
+                                        case case_2
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_3
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      qed
+                                    next
+                                      case case_2
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_2
+                                        by contradiction /* from formulas */
+                                      next
+                                        case case_3
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      qed
+                                    next
+                                      case case_3
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_2
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_3
+                                        by contradiction /* from formulas */
+                                      qed
+                                    qed
+                                  next
+                                    case Verifier_Send_5
+                                    by contradiction /* cyclic */
+                                  next
+                                    case c_sign
+                                    solve( !KU( ~sk.4 ) @ #vk.5 )
+                                      case Reveal
+                                      by contradiction /* from formulas */
+                                    qed
+                                  qed
+                                qed
+                              qed
+                            qed
+                          qed
+                        qed
+                      next
+                        case c_sign
+                        solve( !KU( ~sk.3 ) @ #vk.5 )
+                          case Reveal
+                          by contradiction /* from formulas */
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        next
+          case c_sign
+          solve( !KU( ~sk.2 ) @ #vk.4 )
+            case Reveal
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    qed
+  next
+    case case_3
+    solve( (pk(skV2) = pkV1)  ∥ (pk(skV2) = pkV2)  ∥
+           (pk(skV2) = pk(skV1)) )
+      case case_1
+      solve( St_R_1( $R, $S, skR, <pk(skV2), pkV2, pk(skV1)> ) ▶₀ #i )
+        case Init_Replication
+        solve( !KU( sign(<pkS, aenc(k, pk(~sk))>, ~sk.3) ) @ #vk.1 )
+          case Signer_Send_3
+          by contradiction /* from formulas */
+        next
+          case Verifier_Send_5
+          solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+            case Init_Replication
+            solve( Create( R.1, ~sk.4, 'Signer' ) @ #j.1 )
+              case Init_Signer
+              solve( !SecretKey( $S.1, ~sk.4 ) ▶₀ #j.1 )
+                case Register
+                solve( !PublicKey( $V1.1, pk(~sk.1) ) ▶₁ #j.1 )
+                  case Register
+                  solve( !PublicKey( $V2.1, pk(~sk.2) ) ▶₂ #j.1 )
+                    case Register
+                    solve( !PublicKey( $V3.1, pk(~sk.3) ) ▶₃ #j.1 )
+                      case Register
+                      solve( !KU( sign(<pk(~sk.4), aenc(k, pk(~sk))>, ~sk.1) ) @ #vk.2 )
+                        case Signer_Send_3
+                        by contradiction /* from formulas */
+                      next
+                        case Verifier_Send_5
+                        solve( (#vr.8 = #vr.13)  ∥ ((¬($V3 = $V1)) ∧ (¬(~sk.3 = ~sk.1))) )
+                          case case_1
+                          by contradiction /* from formulas */
+                        next
+                          case case_2
+                          solve( (#vr.13 = #vr.8)  ∥ ((¬($V1 = $V3)) ∧ (¬(~sk.1 = ~sk.3))) )
+                            case case_1
+                            by contradiction /* from formulas */
+                          next
+                            case case_2
+                            solve( (#vr.8 = #vr.13)  ∥ (¬(~sk.3 = ~sk.1)) )
+                              case case_1
+                              by contradiction /* from formulas */
+                            next
+                              case case_2
+                              solve( (#vr.13 = #vr.8)  ∥ (¬(~sk.1 = ~sk.3)) )
+                                case case_1
+                                by contradiction /* from formulas */
+                              next
+                                case case_2
+                                solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+                                  case Init_Replication
+                                  solve( !KU( sign(<pk(~sk.4), aenc(k, pk(~sk))>, ~sk.4) ) @ #vk.3 )
+                                    case Signer_Send_3
+                                    solve( (pk(skV1) = pk(~sk.1))  ∥ (pk(skV1) = pk(~sk.2))  ∥
+                                           (pk(skV1) = pk(~sk.3)) )
+                                      case case_1
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        by contradiction /* from formulas */
+                                      next
+                                        case case_2
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_3
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      qed
+                                    next
+                                      case case_2
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_2
+                                        by contradiction /* from formulas */
+                                      next
+                                        case case_3
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      qed
+                                    next
+                                      case case_3
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_2
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_3
+                                        by contradiction /* from formulas */
+                                      qed
+                                    qed
+                                  next
+                                    case Verifier_Send_5
+                                    by contradiction /* cyclic */
+                                  next
+                                    case c_sign
+                                    solve( !KU( ~sk.4 ) @ #vk.5 )
+                                      case Reveal
+                                      by contradiction /* from formulas */
+                                    qed
+                                  qed
+                                qed
+                              qed
+                            qed
+                          qed
+                        qed
+                      next
+                        case c_sign
+                        solve( !KU( ~sk.1 ) @ #vk.5 )
+                          case Reveal
+                          by contradiction /* from formulas */
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        next
+          case c_sign
+          solve( !KU( ~sk.3 ) @ #vk.4 )
+            case Reveal
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    next
+      case case_2
+      solve( St_R_1( $R, $S, skR, <pkV1, pk(skV2), pk(skV1)> ) ▶₀ #i )
+        case Init_Replication
+        solve( !KU( sign(<pkS, aenc(k, pk(~sk))>, ~sk.3) ) @ #vk.1 )
+          case Signer_Send_3
+          by contradiction /* from formulas */
+        next
+          case Verifier_Send_5
+          solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+            case Init_Replication
+            solve( Create( R.1, ~sk.4, 'Signer' ) @ #j.1 )
+              case Init_Signer
+              solve( !SecretKey( $S.1, ~sk.4 ) ▶₀ #j.1 )
+                case Register
+                solve( !PublicKey( $V1.1, pk(~sk.1) ) ▶₁ #j.1 )
+                  case Register
+                  solve( !PublicKey( $V2.1, pk(~sk.2) ) ▶₂ #j.1 )
+                    case Register
+                    solve( !PublicKey( $V3.1, pk(~sk.3) ) ▶₃ #j.1 )
+                      case Register
+                      solve( !KU( sign(<pk(~sk.4), aenc(k, pk(~sk))>, ~sk.2) ) @ #vk.2 )
+                        case Signer_Send_3
+                        by contradiction /* from formulas */
+                      next
+                        case Verifier_Send_5
+                        solve( (#vr.8 = #vr.13)  ∥ ((¬($V3 = $V2)) ∧ (¬(~sk.3 = ~sk.2))) )
+                          case case_1
+                          by contradiction /* from formulas */
+                        next
+                          case case_2
+                          solve( (#vr.13 = #vr.8)  ∥ ((¬($V2 = $V3)) ∧ (¬(~sk.2 = ~sk.3))) )
+                            case case_1
+                            by contradiction /* from formulas */
+                          next
+                            case case_2
+                            solve( (#vr.8 = #vr.13)  ∥ (¬(~sk.3 = ~sk.2)) )
+                              case case_1
+                              by contradiction /* from formulas */
+                            next
+                              case case_2
+                              solve( (#vr.13 = #vr.8)  ∥ (¬(~sk.2 = ~sk.3)) )
+                                case case_1
+                                by contradiction /* from formulas */
+                              next
+                                case case_2
+                                solve( Create( R.2, ~sk.5, 'Replication' ) @ #vr )
+                                  case Init_Replication
+                                  solve( !KU( sign(<pk(~sk.4), aenc(k, pk(~sk))>, ~sk.4) ) @ #vk.3 )
+                                    case Signer_Send_3
+                                    solve( (pk(skV1) = pk(~sk.1))  ∥ (pk(skV1) = pk(~sk.2))  ∥
+                                           (pk(skV1) = pk(~sk.3)) )
+                                      case case_1
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        by contradiction /* from formulas */
+                                      next
+                                        case case_2
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_3
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      qed
+                                    next
+                                      case case_2
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_2
+                                        by contradiction /* from formulas */
+                                      next
+                                        case case_3
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      qed
+                                    next
+                                      case case_3
+                                      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+                                             (pk(skV2) = pk(~sk.3)) )
+                                        case case_1
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_2
+                                        solve( !KU( ~sk.4 ) @ #vk.3 )
+                                          case Reveal
+                                          by contradiction /* from formulas */
+                                        qed
+                                      next
+                                        case case_3
+                                        by contradiction /* from formulas */
+                                      qed
+                                    qed
+                                  next
+                                    case Verifier_Send_5
+                                    by contradiction /* cyclic */
+                                  next
+                                    case c_sign
+                                    solve( !KU( ~sk.4 ) @ #vk.5 )
+                                      case Reveal
+                                      by contradiction /* from formulas */
+                                    qed
+                                  qed
+                                qed
+                              qed
+                            qed
+                          qed
+                        qed
+                      next
+                        case c_sign
+                        solve( !KU( ~sk.2 ) @ #vk.5 )
+                          case Reveal
+                          by contradiction /* from formulas */
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        next
+          case c_sign
+          solve( !KU( ~sk.3 ) @ #vk.4 )
+            case Reveal
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    next
+      case case_3
+      by contradiction /* from formulas */
+    qed
+  qed
+next
+  case Signer_Send_3
+  solve( St_S_2( $S, k, <pkV1, pkV2, pkV3>, pkR ) ▶₀ #i )
+    case Signer_Check
+    solve( (pk(skV1) = pk(~sk.1))  ∥ (pk(skV1) = pk(~sk.2))  ∥
+           (pk(skV1) = pk(~sk.3)) )
+      case case_1
+      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+             (pk(skV2) = pk(~sk.3)) )
+        case case_1
+        by contradiction /* from formulas */
+      next
+        case case_2
+        solve( !KU( ~sk ) @ #vk )
+          case Reveal
+          by contradiction /* from formulas */
+        qed
+      next
+        case case_3
+        solve( !KU( ~sk ) @ #vk )
+          case Reveal
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case case_2
+      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+             (pk(skV2) = pk(~sk.3)) )
+        case case_1
+        solve( !KU( ~sk ) @ #vk )
+          case Reveal
+          by contradiction /* from formulas */
+        qed
+      next
+        case case_2
+        by contradiction /* from formulas */
+      next
+        case case_3
+        solve( !KU( ~sk ) @ #vk )
+          case Reveal
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case case_3
+      solve( (pk(skV2) = pk(~sk.1))  ∥ (pk(skV2) = pk(~sk.2))  ∥
+             (pk(skV2) = pk(~sk.3)) )
+        case case_1
+        solve( !KU( ~sk ) @ #vk )
+          case Reveal
+          by contradiction /* from formulas */
+        qed
+      next
+        case case_2
+        solve( !KU( ~sk ) @ #vk )
+          case Reveal
+          by contradiction /* from formulas */
+        qed
+      next
+        case case_3
+        by contradiction /* from formulas */
+      qed
+    qed
+  qed
+qed
+
+restriction SameVerifierKeys:
+  "∀ k1 k2 k3 k4 k5 k6 #a #b.
+    (((VerifierKeys( k1, k2, k3 ) @ #a) ∧
+      (VerifierKeys( k4, k5, k6 ) @ #b)) ∧
+     (¬(#a = #b))) ⇒
+    (((k1 = k4) ∧ (k2 = k5)) ∧ (k3 = k6))"
+  // safety formula
+
+restriction NoSameSecretKeys:
+  "∀ V1 V2 k1 k2 #a #b.
+    (((Create( V1, k1, 'Verifier' ) @ #a) ∧
+      (Create( V2, k2, 'Verifier' ) @ #b)) ∧
+     (¬(#a = #b))) ⇒
+    ((¬(V1 = V2)) ∧ (¬(k1 = k2)))"
+  // safety formula
+
+restriction uniqueKey:
+  "∀ k1 k2 #i #j.
+    (((SK( k1 ) @ #i) ∧ (SK( k2 ) @ #j)) ∧ (¬(#i = #j))) ⇒
+    (¬(k1 = k2))"
+  // safety formula
+
+restriction CorrectReplicationPublicKey:
+  "∀ k1 #i.
+    (ReplicationPublicKey( k1 ) @ #i) ⇒
+    (∃ R k2 #j. (Create( R, k2, 'Replication' ) @ #j) ∧ (k1 = pk(k2)))"
+
+restriction CorrectSignerPublicKey:
+  "∀ k1 #i.
+    (SignerPublicKey( k1 ) @ #i) ⇒
+    (∃ R k2 #j. (Create( R, k2, 'Signer' ) @ #j) ∧ (k1 = pk(k2)))"
+
+restriction Equal:
+  "∀ x y #i. (Equal( x, y ) @ #i) ⇒ (x = y)"
+  // safety formula
+
+restriction Diff:
+  "∀ x y #i. (Diff( x, y ) @ #i) ⇒ (¬(x = y))"
+  // safety formula
+
+restriction OnlyOneSigner:
+  "∀ S1 S2 k1 k2 #i #j.
+    ((Create( S1, k1, 'Signer' ) @ #i) ∧
+     (Create( S2, k2, 'Signer' ) @ #j)) ⇒
+    (#i = #j)"
+  // safety formula
+
+restriction OnlyOneReplication:
+  "∀ S1 S2 k1 k2 #i #j.
+    ((Create( S1, k1, 'Replication' ) @ #i) ∧
+     (Create( S2, k2, 'Replication' ) @ #j)) ⇒
+    (#i = #j)"
+  // safety formula
+
+restriction Included:
+  "∀ p1 p2 p3 p4 #i.
+    (Included( p1, <p2, p3, p4> ) @ #i) ⇒
+    (((p1 = p2) ∨ (p1 = p3)) ∨ (p1 = p4))"
+  // safety formula
+
+restriction AllDiff:
+  "∀ k1 k2 k3 k4 #i.
+    (AllDiff( k1, k2, k3, k4 ) @ #i) ⇒
+    ((((((¬(k1 = k2)) ∧ (¬(k1 = k3))) ∧ (¬(k1 = k4))) ∧ (¬(k2 = k3))) ∧
+      (¬(k2 = k4))) ∧
+     (¬(k3 = k4)))"
+  // safety formula
+
+/* All well-formedness checks were successful. */
+
+end

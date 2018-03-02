@@ -16,10 +16,6 @@ theory KeyReplication
 begin
 
 builtins: asymmetric-encryption, signing
-functions: 
-  extract/2
-equations: 
-  extract(sign{m}skS, pk(skS)) = m
 
 
 /*
@@ -35,7 +31,7 @@ rule Register:
 
 rule Reveal:
     [ !SecretKey(A, ltk) ]
-  --[ Reveal(A) ]->
+  --[ Reveal(pk(ltk)) ]->
     [ Out(ltk) ]
 
 
@@ -49,7 +45,7 @@ rule Reveal:
 rule Init_Replication:
     [ !SecretKey($R, skR), !PublicKey($V1, pkV1), !PublicKey($V2, pkV2), !PublicKey($V3, pkV3) ]
   --[ Create($R, skR, 'Replication'), SK(skR), AllDiff(pk(skR), pkV1, pkV2, pkV3), VerifierKeys(pkV1, pkV2, pkV3) ]->
-    [ St_R_1($R, skR, <pkV1, pkV2, pkV3>) ]
+    [ St_R_1($R, $S, skR, <pkV1, pkV2, pkV3>) ]
 
 rule Init_Verifier:
     [ !SecretKey($V, skV), !PublicKey($S, pkS), !PublicKey($R, pkR), Fr(~id) ]
@@ -76,7 +72,7 @@ rule Verifier_Send_1:
   in
     [ St_V_1($V, skV, pk(skS), pk(skR), id) ]
   --[ Send($V, msg) ]->
-    [ St_V_2($V, skV, pk(skS), pk(skR), id), /*Request(msg),*/ Out(msg) ]
+    [ St_V_2($V, skV, pk(skS), pk(skR), id), Out(msg) ]
 
 
 // Stage 2: Signer Check
@@ -92,18 +88,18 @@ rule Signer_Check:
 
 rule Signer_Send_3:
   let
-    enc = aenc{$S, skS}pkR
-    response = sign{enc}skS
+    enc = aenc{skS}pkR
+    response = sign{pk(skS), enc}skS
   in
     [ St_S_2($S, skS, <pkV1, pkV2, pkV3>, pkR) ]
-  --[ Send($S, response), Secret($S, skS), Honest($S), Honest($R) ]->
-    [ St_S_3($S, skS, <pkV1, pkV2, pkV3>, pkR), /*!SignerResponse(response),*/ Out(response) ]
+  --[ Send($S, response), Secret(skS), Honest(pk(skS)), Honest(pkR), Honest(pkV1), Honest(pkV2), Honest(pkV3) ]->
+    [ St_S_3($S, skS, <pkV1, pkV2, pkV3>, pkR), Out(response) ]
 
 
 // Stage 4: Verifier Check
 
 rule Verifier_Check:
-    [ St_V_2($V, skV, pk(skS), pk(skR), id), /*!SignerResponse(sign{enc}skS)*/ In(sign{enc}skS) ]
+    [ St_V_2($V, skV, pk(skS), pk(skR), id), In(sign{pk(skS), enc}skS) ]
   -->
     [ St_V_3($V, skV, pk(skS), pk(skR), id, enc) ]
 
@@ -113,20 +109,20 @@ rule Verifier_Check:
 
 rule Verifier_Send_5:
   let
-    response = sign{enc}skV
+    response = sign{pk(skS), enc}skV
   in
     [ St_V_3($V, skV, pk(skS), pk(skR), id, enc) ]
   --[ Send($V, response) ]->
-    [ St_V_4($V, skV, pk(skS), pk(skR), id), /*SignerKey(response),*/ Out(response) ]
+    [ St_V_4($V, skV, pk(skS), pk(skR), id), Out(response) ]
 
 
 
 // Stage 6: Replication Check
 
 rule Replication_Check:
-    [ St_R_1($R, skR, <pkV1, pkV2, pkV3>), In(sign{aenc{S, skS}pk(skR)}skV1), In(sign{aenc{S, skS}pk(skR)}skV2) ]
-  --[ Diff(skV1, skV2), Included(pk(skV1), <pkV1, pkV2, pkV3>), Included(pk(skV2), <pkV1, pkV2, pkV3>), Finish(), Secret(S, skS), Honest($R), Honest(S) ]->
-    [ St_R_2($R, skR, <pkV1, pkV2, pkV3>, skS) ]
+    [ St_R_1($R, $S, skR, <pkV1, pkV2, pkV3>), In(sign{pkS, aenc{skS}pk(skR)}skV1), In(sign{pkS, aenc{skS}pk(skR)}skV2) ]
+  --[ Diff(skV1, skV2), Included(pk(skV1), <pkV1, pkV2, pkV3>), Included(pk(skV2), <pkV1, pkV2, pkV3>), Finish(), Secret(skS), Honest(pk(skR)), Honest(pkS), Honest(pkV1), Honest(pkV2), Honest(pkV3) ]->
+    [ St_R_2($R, $S, skR, <pkV1, pkV2, pkV3>, pkS, skS) ]
 
 
 /*
@@ -143,7 +139,7 @@ lemma executeability:
 
 lemma SecretSigningKey:
   all-traces
-  "All S k #i. (Secret(S, k)@i & not(Ex X #a. not(S = X) & Reveal(X)@a)) ==> (not(Ex #j. K(k)@j)) | (Ex B #j. Reveal(B)@j & Honest(B)@i)"
+  "All k #i. Secret(k)@i ==> (not(Ex #j. K(k)@j)) | (Ex B #j. Reveal(B)@j & Honest(B)@i)"
 
 
 
@@ -190,7 +186,7 @@ restriction AllDiff:
                                                       not(k1 = k4) &
                                                       not(k2 = k3) & 
                                                       not(k2 = k4) & 
-                                                      not(k3 = k4)"
+                                                      not(k3 = k4) "
 
 
 end

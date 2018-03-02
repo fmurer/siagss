@@ -1,0 +1,309 @@
+theory LogVerification begin
+
+// Function signature and definition of the equational theory E
+
+functions: fst/1, pair/2, pk/1, sign/2, snd/1, true/0, verify/3
+equations:
+    fst(<x.1, x.2>) = x.1,
+    snd(<x.1, x.2>) = x.2,
+    verify(sign(x.1, x.2), x.1, pk(x.2)) = true
+
+rule (modulo E) Register:
+   [ Fr( ~sk ) ]
+  -->
+   [ !SecretKey( $A, ~sk ), !PublicKey( $A, pk(~sk) ), Out( pk(~sk) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal:
+   [ !SecretKey( A, ltk ) ] --[ Reveal( A ) ]-> [ Out( ltk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Init_Signer:
+   [
+   !SecretKey( S, skS ), !PublicKey( V1, pkV1 ),
+   !PublicKey( V2, pkV2 ), !PublicKey( V3, pkV3 )
+   ]
+  --[
+  Create( S, 'Signer' ), Diff( pkV1, pkV2 ), Diff( pkV1, pkV3 ),
+  Diff( pkV2, pkV3 )
+  ]->
+   [ St_S_1( S, skS, <pkV1, pkV2, pkV3> ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Init_Verifier:
+   [ Fr( ~id ), !SecretKey( V, skV ), !PublicKey( S, pkS ) ]
+  --[ Create( V, 'Verifier' ) ]->
+   [ St_V_1( V, S, skV, pkS ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) V_1_Send:
+   [ St_V_1( V, S, skV, pkS ), Fr( ~nonce ), Fr( ~hash ) ]
+  --[ Send( V, sign(<~hash, ~nonce>, skV) ) ]->
+   [
+   St_V_2( V, S, skV, pkS, ~nonce, ~hash ),
+   Out( sign(<~hash, ~nonce>, skV) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) S_1_Receive:
+   [ St_S_1( S, skS, <pkV1, pkV2, pkV3> ), In( sign(<hash, n>, skV) )
+   ]
+  --[
+  Recv( $V, sign(<hash, n>, skV) ),
+  Included( pk(skV), <pkV1, pkV2, pkV3> )
+  ]->
+   [ St_S_2( S, skS, <pkV1, pkV2, pkV3>, hash, n, pk(skV) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) S_2_Send:
+   [
+   St_S_2( S, skS, <pkV1, pkV2, pkV3>, hash, n, admin ), Fr( ~L ),
+   Fr( ~h_new )
+   ]
+  --[
+  Send( S, sign(<~L, ~h_new, n>, skS) ),
+  Running( pk(skS), admin, <'I', 'R', ~L, ~h_new, n> )
+  ]->
+   [
+   St_S_3( S, skS, <pkV1, pkV2, pkV3>, hash, n, ~L ),
+   Out( sign(<~L, ~h_new, n>, skS) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) V_2_Receive:
+   [
+   St_V_2( V, S, skV, pk(skS), nonce, hash ),
+   In( sign(<log, new_hash, nonce>, skS) )
+   ]
+  --[
+  Recv( S, sign(<log, new_hash, nonce>, skS) ),
+  Commit( pk(skV), pk(skS), <'I', 'R', log, new_hash, nonce> ),
+  Honest( S ), Honest( V ), Finish( V )
+  ]->
+   [ St_V_3( V, S, skV, pk(skS), nonce, hash, log, new_hash ) ]
+
+  /* has exactly the trivial AC variant */
+
+lemma executeability:
+  exists-trace "∃ A #i. Finish( A ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ A #i. (Finish( A ) @ #i)"
+*/
+simplify
+solve( St_V_2( A, S, skV, pk(skS), nonce, hash ) ▶₀ #i )
+  case V_1_Send
+  solve( !KU( sign(<log, new_hash, ~nonce>, ~sk.1) ) @ #vk )
+    case S_2_Send
+    solve( (pk(skV) = pk(~sk.2))  ∥ (pk(skV) = pk(~sk.3))  ∥
+           (pk(skV) = pk(~sk.4)) )
+      case case_1
+      solve( !KU( sign(<hash.1, ~nonce>, ~sk.2) ) @ #vk.1 )
+        case V_1_Send
+        SOLVED // trace found
+      qed
+    qed
+  qed
+qed
+
+lemma noninjectiveagreementINITIATOR:
+  all-traces
+  "∀ a b t #i.
+    (Commit( a, b, <'I', 'R', t> ) @ #i) ⇒
+    ((∃ #j. Running( b, a, <'I', 'R', t> ) @ #j) ∨
+     (∃ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ a b t #i.
+  (Commit( a, b, <'I', 'R', t> ) @ #i)
+ ∧
+  (∀ #j. (Running( b, a, <'I', 'R', t> ) @ #j) ⇒ ⊥) ∧
+  (∀ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i) ⇒ ⊥)"
+*/
+simplify
+solve( St_V_2( V, S, skV, pk(skS), nonce, hash ) ▶₀ #i )
+  case V_1_Send
+  solve( !KU( sign(<log, new_hash, ~nonce>, ~sk.1) ) @ #vk )
+    case S_2_Send
+    solve( (pk(skV) = pk(~sk.2))  ∥ (pk(skV) = pk(~sk.3))  ∥
+           (pk(skV) = pk(~sk.4)) )
+      case case_1
+      solve( !KU( sign(<hash.1, ~nonce>, ~sk.2) ) @ #vk.1 )
+        case V_1_Send
+        by contradiction /* from formulas */
+      next
+        case c_sign
+        solve( !KU( ~sk.2 ) @ #vk.3 )
+          case Reveal
+          by solve( !KU( ~nonce ) @ #vk.5 )
+        qed
+      qed
+    next
+      case case_2
+      solve( !KU( sign(<hash.1, ~nonce>, ~sk.3) ) @ #vk.1 )
+        case V_1_Send
+        by contradiction /* from formulas */
+      next
+        case c_sign
+        solve( !KU( ~sk.2 ) @ #vk.3 )
+          case Reveal
+          by solve( !KU( ~nonce ) @ #vk.5 )
+        qed
+      qed
+    next
+      case case_3
+      solve( !KU( sign(<hash.1, ~nonce>, ~sk.4) ) @ #vk.1 )
+        case V_1_Send
+        by contradiction /* from formulas */
+      next
+        case c_sign
+        solve( !KU( ~sk.2 ) @ #vk.3 )
+          case Reveal
+          by solve( !KU( ~nonce ) @ #vk.5 )
+        qed
+      qed
+    qed
+  next
+    case c_sign
+    solve( !KU( ~sk.1 ) @ #vk.2 )
+      case Reveal
+      by contradiction /* from formulas */
+    qed
+  qed
+qed
+
+lemma injectiveagreementINITIATOR:
+  all-traces
+  "∀ a b t #i.
+    (Commit( a, b, <'I', 'R', t> ) @ #i) ⇒
+    ((∃ #j.
+       ((Running( b, a, <'I', 'R', t> ) @ #j) ∧ (#j < #i)) ∧
+       (¬(∃ a2 b2 #i2.
+           (Commit( a2, b2, <'I', 'R', t> ) @ #i2) ∧ (¬(#i2 = #i))))) ∨
+     (∃ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ a b t #i.
+  (Commit( a, b, <'I', 'R', t> ) @ #i)
+ ∧
+  (∀ #j.
+    (Running( b, a, <'I', 'R', t> ) @ #j)
+   ⇒
+    ((¬(#j < #i)) ∨
+     (∃ a2 b2 #i2.
+       (Commit( a2, b2, <'I', 'R', t> ) @ #i2) ∧ ¬(#i2 = #i)))) ∧
+  (∀ X #r. (Reveal( X ) @ #r) ∧ (Honest( X ) @ #i) ⇒ ⊥)"
+*/
+simplify
+solve( St_V_2( V, S, skV, pk(skS), nonce, hash ) ▶₀ #i )
+  case V_1_Send
+  solve( !KU( sign(<log, new_hash, ~nonce>, ~sk.1) ) @ #vk )
+    case S_2_Send
+    solve( (pk(skV) = pk(~sk.2))  ∥ (pk(skV) = pk(~sk.3))  ∥
+           (pk(skV) = pk(~sk.4)) )
+      case case_1
+      solve( !KU( sign(<hash.1, ~nonce>, ~sk.2) ) @ #vk.1 )
+        case V_1_Send
+        solve( (#i2 < #i)  ∥ (#i < #i2) )
+          case case_1
+          solve( St_V_2( V, S, skV, pk(skS), ~nonce, hash.1 ) ▶₀ #i2 )
+            case V_1_Send
+            by contradiction /* cyclic */
+          qed
+        next
+          case case_2
+          solve( St_V_2( V, S, skV, pk(skS), ~nonce, hash.1 ) ▶₀ #i2 )
+            case V_1_Send
+            by contradiction /* cyclic */
+          qed
+        qed
+      next
+        case c_sign
+        solve( !KU( ~sk.2 ) @ #vk.3 )
+          case Reveal
+          by solve( !KU( ~nonce ) @ #vk.5 )
+        qed
+      qed
+    next
+      case case_2
+      solve( !KU( sign(<hash.1, ~nonce>, ~sk.3) ) @ #vk.1 )
+        case V_1_Send
+        solve( (#i2 < #i)  ∥ (#i < #i2) )
+          case case_1
+          solve( St_V_2( V, S, skV, pk(skS), ~nonce, hash.1 ) ▶₀ #i2 )
+            case V_1_Send
+            by contradiction /* cyclic */
+          qed
+        next
+          case case_2
+          solve( St_V_2( V, S, skV, pk(skS), ~nonce, hash.1 ) ▶₀ #i2 )
+            case V_1_Send
+            by contradiction /* cyclic */
+          qed
+        qed
+      next
+        case c_sign
+        solve( !KU( ~sk.2 ) @ #vk.3 )
+          case Reveal
+          by solve( !KU( ~nonce ) @ #vk.5 )
+        qed
+      qed
+    next
+      case case_3
+      solve( !KU( sign(<hash.1, ~nonce>, ~sk.4) ) @ #vk.1 )
+        case V_1_Send
+        solve( (#i2 < #i)  ∥ (#i < #i2) )
+          case case_1
+          solve( St_V_2( V, S, skV, pk(skS), ~nonce, hash.1 ) ▶₀ #i2 )
+            case V_1_Send
+            by contradiction /* cyclic */
+          qed
+        next
+          case case_2
+          solve( St_V_2( V, S, skV, pk(skS), ~nonce, hash.1 ) ▶₀ #i2 )
+            case V_1_Send
+            by contradiction /* cyclic */
+          qed
+        qed
+      next
+        case c_sign
+        solve( !KU( ~sk.2 ) @ #vk.3 )
+          case Reveal
+          by solve( !KU( ~nonce ) @ #vk.5 )
+        qed
+      qed
+    qed
+  next
+    case c_sign
+    solve( !KU( ~sk.1 ) @ #vk.2 )
+      case Reveal
+      by contradiction /* from formulas */
+    qed
+  qed
+qed
+
+restriction Included:
+  "∀ p1 p2 p3 p4 #i.
+    (Included( p1, <p2, p3, p4> ) @ #i) ⇒
+    (((p1 = p2) ∨ (p1 = p3)) ∨ (p1 = p4))"
+  // safety formula
+
+restriction Equal:
+  "∀ x y #i. (Equal( x, y ) @ #i) ⇒ (x = y)"
+  // safety formula
+
+restriction Diff:
+  "∀ x y #i. (Diff( x, y ) @ #i) ⇒ (¬(x = y))"
+  // safety formula
+
+/* All well-formedness checks were successful. */
+
+end
