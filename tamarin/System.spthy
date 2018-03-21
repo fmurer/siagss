@@ -105,7 +105,7 @@ rule Signee_Send_4:
   	answer = <~tag, assertion, signature>
   in
     [ St_V_3(V, S, pk(skS), shared), Resonse(<assertion, signature>), Fr(~tag) ]
-  --[ Send(V, <assertion, signature>), FinishSignee(~tag) ]->
+  --[ Send(V, <assertion, signature>), FinishSignee(~tag), SecretShared(shared), Honest(S), Honest(V) ]->
     [ St_V_4(V, S, pk(skS), shared), Out(answer) ]
 
 

@@ -350,6 +350,7 @@ function parseKeySchedule(data) {
 
     if (schedule.pub_key) {
         PUBLIC_KEY = str2buf(schedule.pub_key, 'base64');
+        fs.writeFileSync(PUBLIC_KEYPATH + 'signer.pub', schedule.pub_key);
     }
 
     if (!verifySignature(schedule.keys, schedule.signature)) {

@@ -723,7 +723,8 @@ function generateNewKeySchedule(number_of_keys=10) {
     if (last_end_date) {
         start_date = last_end_date;
     } else {
-        start_date = new Date();    
+        start_date = new Date();
+        start_date = new Date(start_date.setTime(start_date.getTime() + 2 * 60000));    
     }
     
     fs.writeFileSync(constant.SECRET_KEYPATH + 'sk_schedule', "");
