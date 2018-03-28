@@ -1,11 +1,12 @@
 # Master Thesis - A Secure, Isolated and Air-Gapped Signing System
 
+## About
+Keeping the signing key save and secure is a crucial part in a public key infrastructure (PKI). If an attacker manages to steal a signing key, he is able to sign requests by himself and making everyone believe that this request has been certified by the original key holder. Whereas today, signing certificates is done by qualified certificate authorities (CA) like [**Symantec**](https://www.symantec.com/ "Symantec") or [**Verisign**](https://www.verisign.com/ "Verisign"), in the new Internet architecture SCION \cite{scion_book}, medium sized businesses will take over the part of a CA. In this thesis we want to develop a prototype of an easy deployable and low cost signing system that uses commodity hardware, which eventually can be applied in an authority service in RAINS (see [SCION-Book](https://www.scion-architecture.net/pdf/SCION-book.pdf "SCION-Book")) or in the control-plane PKI of a SCION isolation domain. The proposed system would not only eliminate the need of highly technical and secure infrastructure, but also reduces the number of qualified administrators who operate the new certificate signing system. 
+
 
 ## System Overview:
 The following picture shows an overview of how the two systems work together.
 ![System Overview](images/SystemOverview.png "System Overview")
-
-(Step 2 and 3 might be encoded within the same QR-code)
 
 
 ## First small Demo
@@ -14,11 +15,11 @@ In order to run a first small demo do the following:
 
 1. Start the signer
 ```console
-node code/signer/app.js
+./code/signer/run.sh
 ```
 2. Start the signee on another machine
 ```console
-node code/signee/app.js
+./code/signee/run.sh
 ```
 
 3. On both, the signer and the signee, browse to `localhost:3000`
@@ -39,22 +40,50 @@ where this is sent as a POST request.
 #### Signee -> Signer:
 ```
 {
-    id: SOME_UNIQUE_ID,
-    data: { data: DATA_TO_SIGN,
+    data: {
+        0: {
+            data: DATA_TO_SIGN,
             from: VALID_FROM,
-            to: VALID_TO },
-    mac: HMAC_OF_DATA
+            to: VALID_TO,
+            id: UNIQUE_ID
+        },
+        ...
+        i: {
+            data: DATA_TO_SIGN,
+            from: VALID_FROM,
+            to: VALID_TO,
+            id: UNIQUE_ID
+        }
+    },
+    auth: HASH_OF_DATA
 }
 ```
 
 #### Signer -> Signee:
 ```
 {
-    id: SOME_UNIQUE_ID,
-    assertion: { data: DATA_TO_SIGN,
-                 valid_from: DATE_IN_UTC_FORMAT,
-                 valid_until: DATE_IN_UTC_FORMAT },
-    signature: SIGNATURE_OF_ASSERTION },
+    data: {
+        0: {
+            id: UNIQUE_ID,
+            assertion: {
+                data: DATA_TO_SIGN,
+                from: VALID_FROM_IN_UTC,
+                to: VALID_TO_IN_UTC
+            },
+            signature: SIGNATURE_OF_ASSERTION
+        },
+        ...
+        i: {
+            id: UNIQUE_ID,
+            assertion: {
+                data: DATA_TO_SIGN,
+                from: VALID_FROM_IN_UTC,
+                to: VALID_TO_IN_UTC
+            },
+            signature: SIGNATURE_OF_ASSERTION
+        }
+    },
+    auth: HMAC_OF_DATA
 }
 ```
 
