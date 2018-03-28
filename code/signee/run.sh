@@ -1,7 +1,11 @@
 #!/bin/bash
 
-INIT_SCRIPT="./init.sh"
+cd pk && rm * && cd ..
+touch pk/pk_schedule
+touch pk/signer.pub
 
-. "$INIT_SCRIPT"
+cd sk && rm * && cd ..
+touch sk/auth_key
+
 
 node app.js "$@"
