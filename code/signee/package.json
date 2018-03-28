@@ -9,13 +9,13 @@
   "author": "Fabian Murer",
   "license": "ISC",
   "dependencies": {
-    "argparse": "^1.0.9",
+    "argparse": "^1.0.10",
     "body-parser": "^1.18.2",
-    "express": "^4.16.2",
+    "express": "^4.16.3",
     "instascan": "^1.0.0",
-    "jquery": "^3.2.1",
+    "jquery": "^3.3.1",
     "morgan": "^1.9.0",
-    "node-schedule": "^1.2.5",
+    "node-schedule": "^1.3.0",
     "socket.io": "^2.0.4",
     "tweetnacl": "^1.0.0"
   }
