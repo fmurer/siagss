@@ -58,6 +58,10 @@ var PUBLIC_KEY = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'signer.pub')).toS
 PUBLIC_KEY = str2buf(PUBLIC_KEY, 'base64');
 
 var hmac;
+var dh;
+var request_queue = [];
+var request_number = 0;
+
 
 /*
     Socket IO stuff
@@ -170,10 +174,6 @@ io.on('connection', function(client) {
 app.get('/', function(req, res, next) {
     res.sendFile(__dirname + '/index.html');
 });
-
-
-var request_queue = [];
-var request_number = 0;
 
 app.post('/', function(request, response) {
 
@@ -294,8 +294,6 @@ function resendRequest(req, res, data) {
     request_queue.unshift(data_orig)
 }
 
-var dh;
-
 /*
     This function is the beginning of the pairing, i.e., establishing a new shared key for authentication.
     It creates a new Diffie-Hellmann half key using the ECDH algorighm and notifies the browser to generate the
@@ -343,7 +341,11 @@ function pairSystemsGenKey(data) {
     fs.writeFileSync(SHARED_KEY_PATH + 'auth_key', SHARED_KEY);
 }
 
-
+/*
+    This function parses the received key schedule. It stores all the public keys in it and also sets new
+    scheduled jobs in order to fetch the new keys later on.
+    * data:     the new key schedule
+*/
 function parseKeySchedule(data) {
 
     schedule = data;
@@ -384,6 +386,12 @@ function parseKeySchedule(data) {
     });
 }
 
+/*
+    This function is called when the Signee needs a new key schedule from the Signer.
+    It generates a new request and sends it to the browser
+    * initial:  The initial flag is used to indicate the very first request, notifying the Signer
+                to also send his current public key
+*/
 function getNewKeySchedule(initial=false) {
     data = {};
     data['new_schedule'] = "Give me a new key schedule";
@@ -397,6 +405,9 @@ function getNewKeySchedule(initial=false) {
     }
 }
 
+/*
+    This function is called by the scheduled Jobs. It fetches the next public key from the key file
+*/
 function getNextPubKey() {
     schedule = Buffer.from(fs.readFileSync(PUBLIC_KEYPATH + 'pk_schedule')).toString();
     
@@ -427,6 +438,11 @@ function getNextPubKey() {
     
 }
 
+/*
+    This function checks if todays date is within the desired range
+    * from:     Start date
+    * to:       End date
+*/
 function isValid(from, to) {
     var today = Date();
 

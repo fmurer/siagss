@@ -530,6 +530,11 @@ function pairSystems(req, res) {
 
 }
 
+/*
+    This function is called when there is a request to verify the log. The function fetches the needed
+    log entries based on the epoch identifier received with the request and sends them back to the 
+    frontend, together with the latest epoch identifier.
+*/
 function verifyLog(data, res) {
     epoch = data.epoch;
     nonce = data.nonce;
@@ -575,7 +580,9 @@ function verifyLog(data, res) {
     return;
 }
 
-
+/*
+    This function fetches the log entries based on the epoch identifier
+*/
 function getLogs(epoch) {
     var line = '';
 
@@ -608,10 +615,16 @@ function signRequest(data, sign_key) {
     return signature;
 }
 
+/*
+    This function signs a request and returns a signed message instead of only the signature
+*/
 function signRequestBox(data, sign_key) {
     return Buffer.from(curve.sign(data, sign_key)).toString('base64');
 }
 
+/*
+    This function encrypts the data using `theirPubKey`
+*/
 function encryptData(data, nonce, theirPubKey, mySecretKey) {
     curve.box.publicKeyLength = 32;
     curve.box.secretKeyLength = 64;
@@ -619,6 +632,9 @@ function encryptData(data, nonce, theirPubKey, mySecretKey) {
     return enc;
 }
 
+/*
+    This function decrypts the data using `mySecretKey`
+*/
 function decryptData(data, nonce, theirPubKey, mySecretKey) {
     curve.box.publicKeyLength = 32;
     curve.box.secretKeyLength = 64;
@@ -659,6 +675,9 @@ function verifySignature(msg, signature, pub_key) {
     return curve.sign.detached.verify(msg, str2buf(signature, 'base64'), pub_key);
 }
 
+/*
+    This function verifies a signed message 
+*/
 function verifySignatureBox(signature, pub_key) {
     return curve.sign.open(str2buf(signature, 'base64'), pub_key);
 }
@@ -718,6 +737,10 @@ function generateKeyPair() {
     return curve.sign.keyPair();
 }
 
+/*
+    This function generates a new Key Schedule. Thereby it stores the public keys and secret keys in files
+    * number_of_keys:   number of keys to be generated
+*/
 function generateNewKeySchedule(number_of_keys=10) {
 
     if (last_end_date) {
@@ -763,6 +786,10 @@ function generateNewKeySchedule(number_of_keys=10) {
 
 }
 
+/*
+    Once the Signee requested a new key schedule, this function is called. It fetches all the public keys
+    and encodes them in a QR-code. If the initial flag is set, the current public key is also sent.
+*/
 function sendCurrentKeySchedule(initial) {
     schedule = Buffer.from(fs.readFileSync(constant.PUBLIC_KEYPATH + 'pk_schedule')).toString();
     schedule = schedule.split('\n');
@@ -795,6 +822,9 @@ function sendCurrentKeySchedule(initial) {
 
 }
 
+/*
+    This function is called by the scheduled jobs to fetch the next signing key.
+*/
 function getNextSignKey() {
     schedule = Buffer.from(fs.readFileSync(constant.SECRET_KEYPATH + 'sk_schedule')).toString();
 
@@ -826,6 +856,9 @@ function getNextSignKey() {
     
 }
 
+/*
+    This function checks wether todays date is within the desired range
+*/
 function isValid(from, to) {
     var today = Date();
 
@@ -868,6 +901,9 @@ function timeDifference(date1, date2, type) {
     }
 }
 
+/*
+    This function is a log function. It also computes an aggregated hash of the log entires.
+*/
 function crypt_log(operation, success, information='') {
     var date = new Date();
     var datetime = date.getDate() + "/"
