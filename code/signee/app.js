@@ -91,9 +91,11 @@ io.on('connection', function(client) {
                 }
             }
         } else {
-            // Verification successful on Signer side
-            if (data.latest_epoch) { return; }
             
+            // filter requests from log verification and key replication
+            if (data.latest_epoch || data.encrypted_key) { return; }
+
+            // Verification successful on Signer side
             if (!verifyAuth(JSON.stringify(data.data), data.auth)) {
                 // Local Verification failed -> requeue the requests
                 console.log("[!!!] ERROR: Verification failed!");
